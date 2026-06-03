@@ -1,4 +1,4 @@
-# 项目名 ____________
+# Fall-In-Love-With-NekoCafe ____________
 
 > 一句话项目介绍 + 截图
 
@@ -21,4 +21,4 @@ curl http://localhost:8080/healthz
 
 ## 团队
 
-- 组长：________  ________@mail
+- 组长：gaovancheng@gmail.com
