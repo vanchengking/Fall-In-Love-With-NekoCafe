@@ -1,0 +1,28 @@
+### Health
+GET http://localhost:8080/healthz
+
+### Stores
+GET http://localhost:8080/api/stores
+
+### Tables
+GET http://localhost:8080/api/tables?storeId=1&date=2026-06-04&time=18:30&partySize=2
+
+### Create reservation
+POST http://localhost:8080/api/reservations
+Content-Type: application/json
+
+{
+  "data": {
+    "customerName": "林小满",
+    "mobileNumber": "13800000001",
+    "storeId": 1,
+    "reservationDate": "2026-06-04",
+    "reservationTime": "18:30",
+    "partySize": 2,
+    "preferences": ["quiet", "window"],
+    "note": "靠窗"
+  }
+}
+
+### Dashboard
+GET http://localhost:8080/api/dashboard/summary?storeId=1

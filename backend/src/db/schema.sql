@@ -1,6 +1,3 @@
--- NekoCafe 智慧餐饮预约平台初始化脚本
--- PostgreSQL 16+
-
 CREATE TABLE IF NOT EXISTS users (
   id BIGSERIAL PRIMARY KEY,
   name VARCHAR(64) NOT NULL,
