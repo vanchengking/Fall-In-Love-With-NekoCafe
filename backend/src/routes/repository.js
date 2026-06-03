@@ -18,37 +18,111 @@ function conflict(message) {
   return error;
 }
 
+function badRequest(message) {
+  const error = new Error(message);
+  error.status = 400;
+  return error;
+}
+
+function parseJsonArray(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (!value) {
+    return [];
+  }
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function bool(value) {
+  return value === true || value === 1;
+}
+
+function normalizeUser(row) {
+  return row ? { ...row, preferences: parseJsonArray(row.preferences) } : row;
+}
+
+function normalizeCat(row) {
+  return row ? { ...row, personality_tags: parseJsonArray(row.personality_tags) } : row;
+}
+
+function normalizeMenuItem(row) {
+  return row ? { ...row, tags: parseJsonArray(row.tags) } : row;
+}
+
+function normalizeTable(row) {
+  return row
+    ? {
+        ...row,
+        cat_zone: bool(row.cat_zone),
+        available_for_slot: row.available_for_slot === undefined ? undefined : bool(row.available_for_slot),
+      }
+    : row;
+}
+
+function normalizeReservation(row) {
+  if (!row) {
+    return row;
+  }
+  return {
+    ...row,
+    reservation_time: String(row.reservation_time || "").slice(0, 5),
+  };
+}
+
+function normalizeAlert(row) {
+  return row ? { ...row, resolved: bool(row.resolved) } : row;
+}
+
+async function readUserByMobile(mobileNumber, client = { query }) {
+  const { rows } = await client.query("SELECT * FROM users WHERE mobile_number = ? LIMIT 1", [mobileNumber]);
+  return normalizeUser(rows[0]);
+}
+
 async function upsertDemoUser({ name, mobileNumber, role = "customer", preferences = [] }) {
   const mobile = normalizeMobileNumber(mobileNumber);
-  const { rows } = await query(
+  await query(
     `
       INSERT INTO users (name, mobile_number, role, preferences)
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT (mobile_number)
-      DO UPDATE SET name = EXCLUDED.name, role = EXCLUDED.role, updated_at = now()
-      RETURNING *
+      VALUES (?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        name = VALUES(name),
+        role = VALUES(role),
+        preferences = VALUES(preferences),
+        updated_at = CURRENT_TIMESTAMP
     `,
-    [name || "NekoCafe 用户", mobile, role, preferences]
+    [name || "NekoCafe 用户", mobile, role, JSON.stringify(preferences)]
   );
-  return rows[0];
+  return readUserByMobile(mobile);
 }
 
 async function listStores() {
   const { rows } = await query(`
     SELECT
       s.*,
-      COUNT(t.id)::int AS table_count,
-      COALESCE(SUM(t.seats), 0)::int AS total_seats
+      COUNT(t.id) AS table_count,
+      COALESCE(SUM(t.seats), 0) AS total_seats
     FROM stores s
     LEFT JOIN dining_tables t ON t.store_id = s.id
     GROUP BY s.id
     ORDER BY s.id
   `);
-  return rows;
+  return rows.map((row) => ({
+    ...row,
+    table_count: Number(row.table_count),
+    total_seats: Number(row.total_seats),
+  }));
 }
 
 async function listTables({ storeId, reservationDate, reservationTime, partySize }) {
-  const params = [storeId || null, reservationDate || null, reservationTime || null, partySize || null];
   const { rows } = await query(
     `
       SELECT
@@ -57,18 +131,27 @@ async function listTables({ storeId, reservationDate, reservationTime, partySize
           SELECT 1
           FROM reservations r
           WHERE r.table_id = t.id
-            AND ($2::date IS NULL OR r.reservation_date = $2::date)
-            AND ($3::time IS NULL OR r.reservation_time = $3::time)
+            AND (? IS NULL OR r.reservation_date = ?)
+            AND (? IS NULL OR r.reservation_time = ?)
             AND r.status IN ('booked', 'seated')
         ) AS available_for_slot
       FROM dining_tables t
-      WHERE ($1::bigint IS NULL OR t.store_id = $1::bigint)
-        AND ($4::int IS NULL OR t.seats >= $4::int)
+      WHERE (? IS NULL OR t.store_id = ?)
+        AND (? IS NULL OR t.seats >= ?)
       ORDER BY t.store_id, t.seats, t.code
     `,
-    params
+    [
+      reservationDate || null,
+      reservationDate || null,
+      reservationTime || null,
+      reservationTime || null,
+      storeId || null,
+      storeId || null,
+      partySize || null,
+      partySize || null,
+    ]
   );
-  return rows;
+  return rows.map(normalizeTable);
 }
 
 async function listMenuItems(storeId) {
@@ -76,12 +159,12 @@ async function listMenuItems(storeId) {
     `
       SELECT *
       FROM menu_items
-      WHERE ($1::bigint IS NULL OR store_id = $1::bigint)
+      WHERE (? IS NULL OR store_id = ?)
       ORDER BY category, price_cents
     `,
-    [storeId || null]
+    [storeId || null, storeId || null]
   );
-  return rows;
+  return rows.map(normalizeMenuItem);
 }
 
 async function listCats(storeId) {
@@ -89,15 +172,16 @@ async function listCats(storeId) {
     `
       SELECT *
       FROM cats
-      WHERE ($1::bigint IS NULL OR store_id = $1::bigint)
+      WHERE (? IS NULL OR store_id = ?)
       ORDER BY store_id, name
     `,
-    [storeId || null]
+    [storeId || null, storeId || null]
   );
-  return rows;
+  return rows.map(normalizeCat);
 }
 
 async function listReservations({ date, mobileNumber, storeId, status }) {
+  const cleanedMobile = mobileNumber ? normalizeMobileNumber(mobileNumber) : null;
   const { rows } = await query(
     `
       SELECT
@@ -112,46 +196,50 @@ async function listReservations({ date, mobileNumber, storeId, status }) {
       JOIN stores s ON s.id = r.store_id
       LEFT JOIN dining_tables t ON t.id = r.table_id
       LEFT JOIN cats c ON c.id = r.recommended_cat_id
-      WHERE ($1::date IS NULL OR r.reservation_date = $1::date)
-        AND ($2::text IS NULL OR translate(u.mobile_number, '() -', '') LIKE '%' || $2::text || '%')
-        AND ($3::bigint IS NULL OR r.store_id = $3::bigint)
-        AND ($4::text IS NULL OR r.status = $4::text)
+      WHERE (? IS NULL OR r.reservation_date = ?)
+        AND (? IS NULL OR REPLACE(REPLACE(REPLACE(REPLACE(u.mobile_number, '(', ''), ')', ''), ' ', ''), '-', '') LIKE CONCAT('%', ?, '%'))
+        AND (? IS NULL OR r.store_id = ?)
+        AND (? IS NULL OR r.status = ?)
       ORDER BY r.reservation_date, r.reservation_time
     `,
-    [date || null, mobileNumber ? normalizeMobileNumber(mobileNumber) : null, storeId || null, status || null]
+    [
+      date || null,
+      date || null,
+      cleanedMobile,
+      cleanedMobile,
+      storeId || null,
+      storeId || null,
+      status || null,
+      status || null,
+    ]
   );
-  return rows;
+  return rows.map(normalizeReservation);
 }
 
 async function createReservation(payload) {
   const reservation = assertReservationPayload(payload);
 
   return withTransaction(async (client) => {
-    const userResult = await client.query(
+    await client.query(
       `
         INSERT INTO users (name, mobile_number, role, preferences, points)
-        VALUES ($1, $2, 'customer', $3, 10)
-        ON CONFLICT (mobile_number)
-        DO UPDATE SET
-          name = EXCLUDED.name,
-          preferences = CASE
-            WHEN array_length(EXCLUDED.preferences, 1) IS NULL THEN users.preferences
-            ELSE EXCLUDED.preferences
-          END,
-          points = users.points + 10,
-          updated_at = now()
-        RETURNING *
+        VALUES (?, ?, 'customer', ?, 10)
+        ON DUPLICATE KEY UPDATE
+          name = VALUES(name),
+          preferences = IF(JSON_LENGTH(VALUES(preferences)) = 0, preferences, VALUES(preferences)),
+          points = points + 10,
+          updated_at = CURRENT_TIMESTAMP
       `,
-      [reservation.customerName, reservation.mobileNumber, reservation.preferences]
+      [reservation.customerName, reservation.mobileNumber, JSON.stringify(reservation.preferences)]
     );
-    const user = userResult.rows[0];
+    const user = await readUserByMobile(reservation.mobileNumber, client);
 
     const tableResult = reservation.tableId
       ? await client.query(
           `
             SELECT *
             FROM dining_tables
-            WHERE id = $1 AND store_id = $2 AND seats >= $3
+            WHERE id = ? AND store_id = ? AND seats >= ?
             FOR UPDATE
           `,
           [reservation.tableId, reservation.storeId, reservation.partySize]
@@ -160,14 +248,14 @@ async function createReservation(payload) {
           `
             SELECT *
             FROM dining_tables t
-            WHERE t.store_id = $1
-              AND t.seats >= $2
+            WHERE t.store_id = ?
+              AND t.seats >= ?
               AND t.status = 'available'
               AND NOT EXISTS (
                 SELECT 1 FROM reservations r
                 WHERE r.table_id = t.id
-                  AND r.reservation_date = $3
-                  AND r.reservation_time = $4
+                  AND r.reservation_date = ?
+                  AND r.reservation_time = ?
                   AND r.status IN ('booked', 'seated')
               )
             ORDER BY t.cat_zone DESC, t.seats ASC, t.code ASC
@@ -177,7 +265,7 @@ async function createReservation(payload) {
           [reservation.storeId, reservation.partySize, reservation.reservationDate, reservation.reservationTime]
         );
 
-    const table = tableResult.rows[0];
+    const table = normalizeTable(tableResult.rows[0]);
     if (!table) {
       throw conflict("no available table for the selected slot and party size");
     }
@@ -185,9 +273,9 @@ async function createReservation(payload) {
     const duplicateResult = await client.query(
       `
         SELECT id FROM reservations
-        WHERE table_id = $1
-          AND reservation_date = $2
-          AND reservation_time = $3
+        WHERE table_id = ?
+          AND reservation_date = ?
+          AND reservation_time = ?
           AND status IN ('booked', 'seated')
       `,
       [table.id, reservation.reservationDate, reservation.reservationTime]
@@ -202,8 +290,7 @@ async function createReservation(payload) {
           user_id, store_id, table_id, recommended_cat_id,
           reservation_date, reservation_time, party_size, note
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        RETURNING *
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         user.id,
@@ -217,41 +304,43 @@ async function createReservation(payload) {
       ]
     );
 
-    return { ...created.rows[0], customer_name: user.name, table_code: table.code };
+    const createdId = created.result.insertId;
+    const { rows } = await client.query("SELECT * FROM reservations WHERE id = ?", [createdId]);
+    return normalizeReservation({ ...rows[0], customer_name: user.name, table_code: table.code });
   });
 }
 
 async function updateReservationStatus(id, nextStatus) {
   return withTransaction(async (client) => {
-    const currentResult = await client.query("SELECT * FROM reservations WHERE id = $1 FOR UPDATE", [id]);
-    const reservation = currentResult.rows[0];
+    const currentResult = await client.query("SELECT * FROM reservations WHERE id = ? FOR UPDATE", [id]);
+    const reservation = normalizeReservation(currentResult.rows[0]);
     if (!reservation) {
       throw notFound(`reservation ${id} not found`);
     }
 
     assertStatusTransition(reservation.status, nextStatus);
 
-    const updated = await client.query(
+    await client.query(
       `
         UPDATE reservations
-        SET status = $2, updated_at = now()
-        WHERE id = $1
-        RETURNING *
+        SET status = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
       `,
-      [id, nextStatus]
+      [nextStatus, id]
     );
 
     if (nextStatus === "seated") {
       await client.query(
         `
           INSERT INTO operation_alerts (store_id, level, title, detail)
-          VALUES ($1, 'info', '顾客已入座', '预约 #' || $2 || ' 已确认入座。')
+          VALUES (?, 'info', '顾客已入座', CONCAT('预约 #', ?, ' 已确认入座。'))
         `,
         [reservation.store_id, reservation.id]
       );
     }
 
-    return updated.rows[0];
+    const { rows } = await client.query("SELECT * FROM reservations WHERE id = ?", [id]);
+    return normalizeReservation(rows[0]);
   });
 }
 
@@ -259,29 +348,29 @@ async function createOrder(payload) {
   const reservationId = Number(payload.reservationId);
   const items = Array.isArray(payload.items) ? payload.items : [];
   if (!reservationId || items.length === 0) {
-    const error = new Error("reservationId and items are required");
-    error.status = 400;
-    throw error;
+    throw badRequest("reservationId and items are required");
   }
 
   return withTransaction(async (client) => {
-    const reservationResult = await client.query("SELECT * FROM reservations WHERE id = $1", [reservationId]);
-    const reservation = reservationResult.rows[0];
+    const reservationResult = await client.query("SELECT * FROM reservations WHERE id = ?", [reservationId]);
+    const reservation = normalizeReservation(reservationResult.rows[0]);
     if (!reservation) {
       throw notFound(`reservation ${reservationId} not found`);
     }
 
-    const menuIds = items.map((item) => Number(item.menuItemId));
-    const menuResult = await client.query("SELECT * FROM menu_items WHERE id = ANY($1::bigint[])", [menuIds]);
-    const menuById = new Map(menuResult.rows.map((item) => [Number(item.id), item]));
+    const menuIds = items.map((item) => Number(item.menuItemId)).filter(Boolean);
+    if (menuIds.length === 0) {
+      throw badRequest("at least one valid menuItemId is required");
+    }
+
+    const menuResult = await client.query("SELECT * FROM menu_items WHERE id IN (?)", [menuIds]);
+    const menuById = new Map(menuResult.rows.map((item) => [Number(item.id), normalizeMenuItem(item)]));
 
     let total = 0;
     const normalizedItems = items.map((item) => {
       const menuItem = menuById.get(Number(item.menuItemId));
       if (!menuItem) {
-        const error = new Error(`menu item ${item.menuItemId} not found`);
-        error.status = 400;
-        throw error;
+        throw badRequest(`menu item ${item.menuItemId} not found`);
       }
       const quantity = Math.max(1, Number(item.quantity || 1));
       total += Number(menuItem.price_cents) * quantity;
@@ -291,24 +380,24 @@ async function createOrder(payload) {
     const orderResult = await client.query(
       `
         INSERT INTO orders (reservation_id, user_id, store_id, total_cents)
-        VALUES ($1, $2, $3, $4)
-        RETURNING *
+        VALUES (?, ?, ?, ?)
       `,
       [reservation.id, reservation.user_id, reservation.store_id, total]
     );
-    const order = orderResult.rows[0];
+    const orderId = orderResult.result.insertId;
 
     for (const item of normalizedItems) {
       await client.query(
         `
           INSERT INTO order_items (order_id, menu_item_id, quantity, unit_price_cents)
-          VALUES ($1, $2, $3, $4)
+          VALUES (?, ?, ?, ?)
         `,
-        [order.id, item.menuItem.id, item.quantity, item.menuItem.price_cents]
+        [orderId, item.menuItem.id, item.quantity, item.menuItem.price_cents]
       );
     }
 
-    return order;
+    const { rows } = await client.query("SELECT * FROM orders WHERE id = ?", [orderId]);
+    return rows[0];
   });
 }
 
@@ -323,30 +412,28 @@ async function listOrders(storeId) {
       FROM orders o
       JOIN users u ON u.id = o.user_id
       LEFT JOIN reservations r ON r.id = o.reservation_id
-      WHERE ($1::bigint IS NULL OR o.store_id = $1::bigint)
+      WHERE (? IS NULL OR o.store_id = ?)
       ORDER BY o.created_at DESC
     `,
-    [storeId || null]
+    [storeId || null, storeId || null]
   );
-  return rows;
+  return rows.map((row) => ({ ...row, reservation_time: row.reservation_time ? String(row.reservation_time).slice(0, 5) : null }));
 }
 
 async function addCatHealthRecord(payload) {
   const catId = Number(payload.catId);
   if (!catId) {
-    const error = new Error("catId is required");
-    error.status = 400;
-    throw error;
+    throw badRequest("catId is required");
   }
 
-  const { rows } = await query(
+  const result = await query(
     `
       INSERT INTO cat_health_records (cat_id, weight_kg, vaccine_note, interaction_note)
-      VALUES ($1, $2, $3, $4)
-      RETURNING *
+      VALUES (?, ?, ?, ?)
     `,
     [catId, payload.weightKg || null, payload.vaccineNote || null, payload.interactionNote || null]
   );
+  const { rows } = await query("SELECT * FROM cat_health_records WHERE id = ?", [result.result.insertId]);
   return rows[0];
 }
 
@@ -355,11 +442,11 @@ async function listCatHealthRecords(catId) {
     `
       SELECT *
       FROM cat_health_records
-      WHERE ($1::bigint IS NULL OR cat_id = $1::bigint)
+      WHERE (? IS NULL OR cat_id = ?)
       ORDER BY recorded_at DESC
       LIMIT 50
     `,
-    [catId || null]
+    [catId || null, catId || null]
   );
   return rows;
 }
@@ -367,8 +454,8 @@ async function listCatHealthRecords(catId) {
 async function getRecommendations({ userId, storeId, preferences = [] }) {
   let effectivePreferences = preferences;
   if (userId) {
-    const userResult = await query("SELECT preferences FROM users WHERE id = $1", [userId]);
-    effectivePreferences = userResult.rows[0]?.preferences || effectivePreferences;
+    const userResult = await query("SELECT preferences FROM users WHERE id = ?", [userId]);
+    effectivePreferences = normalizeUser(userResult.rows[0])?.preferences || effectivePreferences;
   }
 
   const [cats, tables, menuItems] = await Promise.all([
@@ -387,46 +474,50 @@ async function getDashboardSummary(storeId) {
   const { rows: summaryRows } = await query(
     `
       SELECT
-        COUNT(*) FILTER (WHERE r.reservation_date = CURRENT_DATE)::int AS today_reservations,
-        COUNT(*) FILTER (WHERE r.status = 'seated')::int AS seated_count,
-        COUNT(*) FILTER (WHERE r.status = 'finished')::int AS finished_count,
-        COUNT(DISTINCT r.user_id)::int AS unique_customers
+        SUM(CASE WHEN r.reservation_date = CURRENT_DATE THEN 1 ELSE 0 END) AS today_reservations,
+        SUM(CASE WHEN r.status = 'seated' THEN 1 ELSE 0 END) AS seated_count,
+        SUM(CASE WHEN r.status = 'finished' THEN 1 ELSE 0 END) AS finished_count,
+        COUNT(DISTINCT r.user_id) AS unique_customers
       FROM reservations r
-      WHERE ($1::bigint IS NULL OR r.store_id = $1::bigint)
+      WHERE (? IS NULL OR r.store_id = ?)
     `,
-    [storeId || null]
+    [storeId || null, storeId || null]
   );
 
   const { rows: revenueRows } = await query(
     `
-      SELECT COALESCE(SUM(total_cents), 0)::int AS revenue_cents
+      SELECT COALESCE(SUM(total_cents), 0) AS revenue_cents
       FROM orders
-      WHERE ($1::bigint IS NULL OR store_id = $1::bigint)
+      WHERE (? IS NULL OR store_id = ?)
         AND payment_status = 'sandbox_paid'
     `,
-    [storeId || null]
+    [storeId || null, storeId || null]
   );
 
   const { rows: alertRows } = await query(
     `
       SELECT *
       FROM operation_alerts
-      WHERE ($1::bigint IS NULL OR store_id = $1::bigint)
+      WHERE (? IS NULL OR store_id = ?)
         AND resolved = false
       ORDER BY created_at DESC
       LIMIT 5
     `,
-    [storeId || null]
+    [storeId || null, storeId || null]
   );
 
-  const summary = summaryRows[0];
-  const finished = Math.max(1, summary.finished_count || 0);
+  const summary = summaryRows[0] || {};
+  const finishedCount = Number(summary.finished_count || 0);
+  const finished = Math.max(1, finishedCount);
   return {
-    ...summary,
-    revenue_cents: revenueRows[0].revenue_cents,
-    turnover_rate: Number(((summary.finished_count || 0) / finished).toFixed(2)),
-    repeat_rate: summary.unique_customers > 0 ? 0.42 : 0,
-    alerts: alertRows,
+    today_reservations: Number(summary.today_reservations || 0),
+    seated_count: Number(summary.seated_count || 0),
+    finished_count: finishedCount,
+    unique_customers: Number(summary.unique_customers || 0),
+    revenue_cents: Number(revenueRows[0]?.revenue_cents || 0),
+    turnover_rate: Number((finishedCount / finished).toFixed(2)),
+    repeat_rate: Number(summary.unique_customers || 0) > 0 ? 0.42 : 0,
+    alerts: alertRows.map(normalizeAlert),
   };
 }
 

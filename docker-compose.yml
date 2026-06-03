@@ -6,13 +6,13 @@ services:
     environment:
       NODE_ENV: production
       PORT: 8080
-      DATABASE_URL: postgres://neko:neko@postgres:5432/neko_cafe
+      DATABASE_URL: mysql://neko:neko@mysql:3306/neko_cafe
       REDIS_URL: redis://redis:6379
       AUTO_SEED: "true"
     ports:
       - "8080:8080"
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
       redis:
         condition: service_started
@@ -26,19 +26,20 @@ services:
     depends_on:
       - backend
 
-  postgres:
-    image: postgres:16-alpine
+  mysql:
+    image: mysql:8.4
     environment:
-      POSTGRES_DB: neko_cafe
-      POSTGRES_USER: neko
-      POSTGRES_PASSWORD: neko
+      MYSQL_DATABASE: neko_cafe
+      MYSQL_USER: neko
+      MYSQL_PASSWORD: neko
+      MYSQL_ROOT_PASSWORD: neko_root
     ports:
-      - "5432:5432"
+      - "3306:3306"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - mysql-data:/var/lib/mysql
       - ./db/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U neko -d neko_cafe"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uneko -pneko --silent"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -49,4 +50,4 @@ services:
       - "6379:6379"
 
 volumes:
-  postgres-data:
+  mysql-data:

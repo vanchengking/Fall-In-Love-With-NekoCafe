@@ -14,7 +14,7 @@ Accepted
 
 - 前端：Vue 3 + Vite
 - 后端：Node.js 20 + Express 5
-- 数据库：PostgreSQL 16
+- 数据库：MySQL 8
 - 缓存预留：Redis 7
 - 部署：Docker Compose
 - 测试：Node 内置 test、k6 压测脚本

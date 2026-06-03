@@ -6,11 +6,11 @@
 |------|------|------|------|------|
 | Node.js | 20+ | MIT | 后端运行时 | https://nodejs.org |
 | Express | 5.x | MIT | 后端 HTTP API | https://expressjs.com |
-| pg | 8.x | MIT | PostgreSQL 客户端 | https://node-postgres.com |
+| mysql2 | 3.x | MIT | MySQL 客户端 | https://github.com/sidorares/node-mysql2 |
 | Vue | 3.x | MIT | 前端界面 | https://vuejs.org |
 | Vite | 5.x | MIT | 前端构建 | https://vitejs.dev |
 | lucide-vue-next | 0.x | ISC | 前端图标 | https://lucide.dev |
-| PostgreSQL | 16 | PostgreSQL License | 关系数据库 | https://www.postgresql.org |
+| MySQL | 8.x | GPLv2 / Commercial | 关系数据库 | https://www.mysql.com |
 | Redis | 7 | BSD-3-Clause | 缓存预留 | https://redis.io |
 
 ## 参考资料
@@ -21,7 +21,7 @@
 
 ## 参考仓库依赖老化记录
 
-参考仓库使用 React 17、react-scripts 4、Jest 26、Knex 0.21、dotenv 8 等旧依赖。当前实现改为 Vue 3 + Vite、Node.js 20+、Express 5、PostgreSQL 16、Redis 7，避免继续依赖 Create React App 和旧 Knex 版本。
+参考仓库使用 React 17、react-scripts 4、Jest 26、Knex 0.21、dotenv 8 等旧依赖。当前实现改为 Vue 3 + Vite、Node.js 20+、Express 5、MySQL 8、Redis 7，避免继续依赖 Create React App 和旧 Knex 版本。
 
 ## AI 辅助记录
 

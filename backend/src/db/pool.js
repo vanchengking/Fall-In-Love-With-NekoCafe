@@ -1,29 +1,60 @@
-const { Pool } = require("pg");
+const mysql = require("mysql2/promise");
 const { config } = require("../config");
 
-const pool = new Pool({
-  connectionString: config.databaseUrl,
-  max: 10,
-  idleTimeoutMillis: 30_000,
+function databaseOptions(databaseUrl) {
+  const url = new URL(databaseUrl);
+  return {
+    host: url.hostname,
+    port: Number(url.port || 3306),
+    user: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+    database: url.pathname.replace(/^\//, ""),
+  };
+}
+
+const pool = mysql.createPool({
+  ...databaseOptions(config.databaseUrl),
+  waitForConnections: true,
+  connectionLimit: 10,
+  idleTimeout: 30_000,
+  multipleStatements: true,
+  charset: "utf8mb4",
+  dateStrings: true,
 });
 
+function toResult([rows, fields]) {
+  return {
+    rows: Array.isArray(rows) ? rows : [],
+    result: rows,
+    fields,
+  };
+}
+
+async function query(text, params = []) {
+  return toResult(await pool.query(text, params));
+}
+
 async function withTransaction(work) {
-  const client = await pool.connect();
+  const connection = await pool.getConnection();
+  const client = {
+    query: async (text, params = []) => toResult(await connection.query(text, params)),
+  };
+
   try {
-    await client.query("BEGIN");
+    await connection.beginTransaction();
     const result = await work(client);
-    await client.query("COMMIT");
+    await connection.commit();
     return result;
   } catch (error) {
-    await client.query("ROLLBACK");
+    await connection.rollback();
     throw error;
   } finally {
-    client.release();
+    connection.release();
   }
 }
 
 module.exports = {
   pool,
-  query: (text, params) => pool.query(text, params),
+  query,
   withTransaction,
 };
