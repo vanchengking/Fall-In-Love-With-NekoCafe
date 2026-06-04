@@ -45,6 +45,9 @@ public class SecurityConfig {
                             .hasAnyRole("STAFF", "MANAGER", "OPERATOR", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/cat-health-records")
                             .hasAnyRole("CAT_KEEPER", "MANAGER", "ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/upload").authenticated()
+                        .requestMatchers(HttpMethod.PATCH, "/api/cats/*/photo", "/api/menu-items/*/photo").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/reviews").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/reservations", "/api/orders").authenticated()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex

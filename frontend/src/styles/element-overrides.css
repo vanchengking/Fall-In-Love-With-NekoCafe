@@ -1,0 +1,17 @@
+:root {
+  --el-color-primary: var(--teal);
+  --el-color-primary-light-3: #14918a;
+  --el-color-primary-light-5: #2aa19a;
+  --el-color-primary-light-7: #7bcec8;
+  --el-color-primary-light-8: #a8e0db;
+  --el-color-primary-light-9: #d4f0ed;
+  --el-color-primary-dark-2: var(--teal-dark);
+  --el-color-danger: var(--coral);
+  --el-border-radius-base: 8px;
+  --el-border-radius-small: 6px;
+  --el-font-family: Inter, "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+}
+
+.el-button {
+  border-radius: 8px;
+}

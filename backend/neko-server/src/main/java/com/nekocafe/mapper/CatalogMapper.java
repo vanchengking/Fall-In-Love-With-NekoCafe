@@ -48,7 +48,7 @@ public interface CatalogMapper {
                                          @Param("partySize") Integer partySize);
 
     @Select("""
-            SELECT id, store_id, name, category, price_cents, tags, status
+            SELECT id, store_id, name, category, price_cents, tags, status, photo_url
             FROM menu_items
             WHERE (#{storeId} IS NULL OR store_id = #{storeId})
             ORDER BY category, price_cents
@@ -223,4 +223,10 @@ public interface CatalogMapper {
             VALUES (#{storeId}, 'info', '顾客已入座', CONCAT('预约 #', #{reservationId}, ' 已确认入座。'))
             """)
     void insertSeatedAlert(@Param("storeId") Long storeId, @Param("reservationId") Long reservationId);
+
+    @org.apache.ibatis.annotations.Update("UPDATE cats SET photo_url = #{photoUrl} WHERE id = #{id}")
+    void updateCatPhoto(@Param("id") Long id, @Param("photoUrl") String photoUrl);
+
+    @org.apache.ibatis.annotations.Update("UPDATE menu_items SET photo_url = #{photoUrl} WHERE id = #{id}")
+    void updateMenuItemPhoto(@Param("id") Long id, @Param("photoUrl") String photoUrl);
 }

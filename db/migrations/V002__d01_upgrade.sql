@@ -2,6 +2,8 @@
 -- 在 V001__init.sql 之上补齐 D-01 数据模型：扩展状态机、猫咪档案字段，
 -- 新增 reservation_events / payment_transactions / reviews / vaccine_records / coupons / audit_logs，
 -- 并补充索引与幂等种子数据。MySQL 8+，由 docker-entrypoint-initdb.d 在首次初始化时按文件名顺序执行。
+SET NAMES utf8mb4;
+SET CHARACTER SET utf8mb4;
 
 -- ---------------------------------------------------------------------------
 -- 1. 扩展猫咪档案字段（照片、生日、可互动状态）

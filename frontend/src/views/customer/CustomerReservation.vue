@@ -1,0 +1,345 @@
+<template>
+  <div>
+    <h2 style="margin-bottom: 6px">预约桌位</h2>
+    <p style="color: #667085; margin-bottom: 20px">选择日期时段 → 在店内布局中点选桌位 → 填写信息 → 提交预约</p>
+
+    <!-- 偏好标签 -->
+    <div class="pref-bar">
+      <span class="pref-label">偏好标签：</span>
+      <PreferenceChips v-model="form.preferences" :options="preferenceOptions" @change="refreshRecommendations" />
+    </div>
+
+    <div class="res-layout">
+      <!-- 左：店内布局 + 预约表单 -->
+      <div class="left-col">
+        <!-- 店内布局图 -->
+        <div class="floor-plan-panel">
+          <div class="floor-header">
+            <h3>店内布局</h3>
+            <div class="legend">
+              <span class="legend-item"><span class="dot dot-free"></span>可选</span>
+              <span class="legend-item"><span class="dot dot-occupied"></span>已占用</span>
+              <span class="legend-item"><span class="dot dot-selected"></span>已选</span>
+              <span class="legend-item"><span class="dot dot-cat"></span>猫区</span>
+            </div>
+          </div>
+
+          <div class="floor-map">
+            <!-- 窗户区域 -->
+            <div class="zone zone-window">
+              <div class="zone-label">靠窗区</div>
+              <div class="zone-tables">
+                <div v-for="table in windowTables" :key="table.id"
+                  class="table-seat" :class="tableClass(table)"
+                  @click="selectTable(table)">
+                  <div class="seat-icon">
+                    <component :is="table.cat_zone ? Cat : Armchair" :size="20" />
+                  </div>
+                  <div class="seat-code">{{ table.code }}</div>
+                  <div class="seat-capacity">{{ table.seats }}人</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 主区域 -->
+            <div class="zone zone-main">
+              <div class="zone-label">主厅</div>
+              <div class="zone-tables">
+                <div v-for="table in mainTables" :key="table.id"
+                  class="table-seat" :class="tableClass(table)"
+                  @click="selectTable(table)">
+                  <div class="seat-icon">
+                    <component :is="table.cat_zone ? Cat : Armchair" :size="20" />
+                  </div>
+                  <div class="seat-code">{{ table.code }}</div>
+                  <div class="seat-capacity">{{ table.seats }}人</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="form.tableId" class="selected-table-info">
+            已选桌位：<strong>{{ selectedTableObj?.code }}</strong>
+            （{{ selectedTableObj?.seats }}人 · {{ selectedTableObj?.area }}）
+            <el-button text type="primary" size="small" @click="form.tableId = ''">取消选择</el-button>
+          </div>
+        </div>
+
+        <!-- 预约信息表单 -->
+        <div class="form-panel">
+          <h3 style="margin-bottom: 14px">预约信息</h3>
+          <el-form :model="form" label-position="top" @submit.prevent="createReservation">
+            <el-row :gutter="14">
+              <el-col :span="12">
+                <el-form-item label="姓名"><el-input v-model="form.customerName" placeholder="请输入姓名" /></el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="手机号"><el-input v-model="form.mobileNumber" placeholder="请输入手机号" /></el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="日期">
+                  <el-date-picker v-model="form.reservationDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" @change="refreshTables" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="时间">
+                  <el-time-picker v-model="form.reservationTime" format="HH:mm" value-format="HH:mm" style="width: 100%" @change="refreshTables" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="8">
+                <el-form-item label="人数">
+                  <el-input-number v-model="form.partySize" :min="1" :max="12" style="width: 100%" @change="refreshTables" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-form-item label="备注"><el-input v-model="form.note" type="textarea" :rows="2" placeholder="特殊需求（可选）" /></el-form-item>
+            <el-button type="primary" native-type="submit" :loading="loading" size="large" style="width: 100%">
+              提交预约
+            </el-button>
+          </el-form>
+        </div>
+      </div>
+
+      <!-- 右：推荐 + 菜品 -->
+      <div class="right-col">
+        <!-- 推荐猫咪 -->
+        <div v-if="recommendations.cat" class="rec-cat-card" @click="form.recommendedCatId = recommendations.cat!.id">
+          <img v-if="recommendations.cat.photo_url" :src="recommendations.cat.photo_url" class="rec-cat-photo" />
+          <div v-else class="rec-cat-avatar"><Cat :size="28" /></div>
+          <div>
+            <div class="rec-cat-name">{{ recommendations.cat.name }}</div>
+            <div class="rec-cat-desc">{{ recommendations.cat.breed }} · {{ recommendations.cat.personality_tags?.join(' / ') }}</div>
+          </div>
+          <el-tag v-if="form.recommendedCatId === recommendations.cat.id" type="success" size="small">已选</el-tag>
+        </div>
+
+        <!-- 推荐桌位 -->
+        <div class="rec-section">
+          <h4>推荐桌位</h4>
+          <div class="rec-table-grid">
+            <div v-for="table in recommendations.tables" :key="table.id"
+              class="rec-table-card" :class="{ selected: form.tableId === table.id }"
+              @click="form.tableId = form.tableId === table.id ? '' : table.id">
+              <div class="rec-table-code">{{ table.code }}</div>
+              <div class="rec-table-info">{{ table.seats }}人 · {{ table.area }}</div>
+              <el-tag v-if="table.cat_zone" size="small" type="success">猫区</el-tag>
+            </div>
+          </div>
+        </div>
+
+        <!-- 推荐菜品（可加入购物车） -->
+        <div class="rec-section">
+          <h4>推荐菜品</h4>
+          <div class="menu-list">
+            <div v-for="item in recommendations.menuItems" :key="item.id" class="menu-card">
+              <img v-if="item.photo_url" :src="item.photo_url" class="menu-photo" />
+              <div class="menu-info">
+                <strong>{{ item.name }}</strong>
+                <span class="menu-meta">{{ item.category }} · {{ item.tags?.join(' / ') }}</span>
+              </div>
+              <div class="menu-right">
+                <span class="menu-price">{{ cents(item.price_cents) }}</span>
+                <el-input-number
+                  :model-value="cart.selectedMenu[item.id] || 0"
+                  @update:model-value="cart.setQuantity(item.id, $event)"
+                  :min="0" :max="9" size="small" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 购物车汇总 -->
+        <div v-if="cart.selectedOrderItems.length > 0" class="cart-summary">
+          <div class="cart-row" v-for="item in cart.selectedOrderItems" :key="item.menuItemId">
+            <span>{{ item.name }} × {{ item.quantity }}</span>
+            <span>{{ cents(item.subtotal) }}</span>
+          </div>
+          <div class="cart-total">
+            <span>合计</span>
+            <span>{{ cents(cart.orderTotal) }}</span>
+          </div>
+          <el-button type="primary" plain style="width: 100%; margin-top: 10px" @click="handleCreateOrder">
+            生成点单 {{ cents(cart.orderTotal) }}
+          </el-button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, computed, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
+import { Cat, Armchair } from '@lucide/vue'
+import PreferenceChips from '@/components/PreferenceChips.vue'
+import { useCartStore } from '@/stores/cart'
+import { useAuthStore } from '@/stores/auth'
+import { api } from '@/utils/http'
+import { tomorrow, cents } from '@/utils/format'
+import { fallbackTables, fallbackCats, fallbackMenuItems } from '@/utils/fallback'
+import type { DiningTable, Cat as CatType, MenuItem, Reservation, Recommendations as RecType } from '@/types'
+
+const cart = useCartStore()
+const auth = useAuthStore()
+const loading = ref(false)
+const tables = ref<DiningTable[]>([])
+const cats = ref<CatType[]>([])
+const menuItems = ref<MenuItem[]>([])
+const recommendations = ref<RecType>({ cat: null, tables: [], menuItems: [] })
+const preferenceOptions = ['quiet', 'window', 'sweet', 'coffee', 'photo', 'healthy']
+
+const form = reactive({
+  customerName: auth.user?.name || '',
+  mobileNumber: auth.user?.mobileNumber || auth.user?.mobile_number || '',
+  storeId: 1,
+  reservationDate: tomorrow(), reservationTime: '18:30',
+  partySize: 2, tableId: '' as string | number,
+  recommendedCatId: '' as string | number,
+  preferences: ['quiet', 'window'] as string[],
+  note: '',
+})
+
+const windowTables = computed(() => tables.value.filter(t => t.area === 'window'))
+const mainTables = computed(() => tables.value.filter(t => t.area !== 'window'))
+const selectedTableObj = computed(() => tables.value.find(t => t.id === form.tableId))
+
+function tableClass(table: DiningTable) {
+  return {
+    occupied: table.available_for_slot === false,
+    selected: form.tableId === table.id,
+    'cat-zone': table.cat_zone,
+  }
+}
+
+function selectTable(table: DiningTable) {
+  if (table.available_for_slot === false) return
+  form.tableId = form.tableId === table.id ? '' : table.id
+}
+
+async function refreshTables() {
+  try {
+    tables.value = await api.get<DiningTable[]>('/tables', {
+      storeId: form.storeId, date: form.reservationDate,
+      time: form.reservationTime, partySize: form.partySize,
+    })
+  } catch { tables.value = fallbackTables }
+}
+
+async function refreshRecommendations() {
+  try {
+    const rec = await api.get<RecType>('/recommendations', {
+      userId: 1, storeId: form.storeId, preferences: form.preferences.join(','),
+    })
+    recommendations.value = rec
+    if (rec.cat) form.recommendedCatId = rec.cat.id
+  } catch {
+    recommendations.value = { cat: cats.value[0] || null, tables: tables.value.slice(0, 3), menuItems: menuItems.value.slice(0, 3) }
+  }
+}
+
+async function createReservation() {
+  if (!form.customerName || !form.mobileNumber) {
+    ElMessage.warning('请填写姓名和手机号')
+    return
+  }
+  loading.value = true
+  try {
+    const created = await api.post<Reservation>('/reservations', { ...form })
+    cart.setReservationId(created.id)
+    ElMessage.success(`预约成功！桌位：${created.table_code || '自动分配'}`)
+    await refreshTables()
+  } catch (e) { ElMessage.error((e as Error).message) }
+  finally { loading.value = false }
+}
+
+async function handleCreateOrder() {
+  try {
+    const order = await cart.createOrder()
+    ElMessage.success(`订单已生成：${cents((order as { total_cents: number }).total_cents)}`)
+  } catch (e) { ElMessage.error((e as Error).message) }
+}
+
+onMounted(async () => {
+  try {
+    const [t, c, m] = await Promise.all([
+      api.get<DiningTable[]>('/tables', { storeId: form.storeId }),
+      api.get<CatType[]>('/cats', { storeId: form.storeId }),
+      api.get<MenuItem[]>('/menu-items', { storeId: form.storeId }),
+    ])
+    tables.value = t; cats.value = c; menuItems.value = m; cart.menuItems = m
+  } catch {
+    tables.value = fallbackTables; cats.value = fallbackCats; menuItems.value = fallbackMenuItems
+  }
+  await refreshRecommendations()
+})
+</script>
+
+<style scoped>
+.pref-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+.pref-label { font-size: 14px; color: #667085; flex-shrink: 0; }
+.res-layout { display: grid; grid-template-columns: 1fr 380px; gap: 20px; }
+@media (max-width: 900px) { .res-layout { grid-template-columns: 1fr; } }
+
+/* 店内布局 */
+.floor-plan-panel { background: #fff; padding: 20px; border-radius: 14px; border: 1px solid #e8e5df; margin-bottom: 16px; }
+.floor-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.floor-header h3 { margin: 0; }
+.legend { display: flex; gap: 12px; font-size: 12px; color: #667085; }
+.legend-item { display: flex; align-items: center; gap: 4px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.dot-free { background: #d1fae5; border: 1px solid #6ee7b7; }
+.dot-occupied { background: #f3f4f6; border: 1px solid #d1d5db; }
+.dot-selected { background: #0f766e; }
+.dot-cat { background: #bbf7d0; border: 1px solid #4ade80; }
+
+.floor-map { display: flex; flex-direction: column; gap: 16px; }
+.zone { border: 2px dashed #e5e7eb; border-radius: 12px; padding: 14px; position: relative; }
+.zone-window { border-color: #93c5fd; background: #f0f9ff; }
+.zone-main { border-color: #d1d5db; background: #fafafa; }
+.zone-label { position: absolute; top: -10px; left: 14px; background: #fff; padding: 0 8px; font-size: 12px; color: #667085; font-weight: 600; }
+.zone-tables { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px; }
+
+.table-seat { width: 90px; padding: 12px 8px; border: 2px solid #d1fae5; border-radius: 12px; text-align: center; cursor: pointer; transition: all 0.15s; background: #fff; }
+.table-seat:hover:not(.occupied) { border-color: #0f766e; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(15,118,110,0.15); }
+.table-seat.selected { border-color: #0f766e; background: #e8f6f1; box-shadow: 0 0 0 3px rgba(15,118,110,0.2); }
+.table-seat.occupied { background: #f3f4f6; border-color: #e5e7eb; cursor: not-allowed; opacity: 0.55; }
+.table-seat.cat-zone { border-color: #86efac; background: #f0fdf4; }
+.seat-icon { color: #0f766e; margin-bottom: 4px; }
+.table-seat.occupied .seat-icon { color: #9ca3af; }
+.seat-code { font-size: 16px; font-weight: 700; color: #172033; }
+.seat-capacity { font-size: 11px; color: #667085; }
+.selected-table-info { margin-top: 12px; font-size: 13px; color: #0f766e; display: flex; align-items: center; gap: 8px; }
+
+/* 预约表单 */
+.form-panel { background: #fff; padding: 20px; border-radius: 14px; border: 1px solid #e8e5df; }
+
+/* 右侧推荐 */
+.right-col { display: flex; flex-direction: column; gap: 14px; }
+.rec-cat-card { display: flex; align-items: center; gap: 14px; padding: 16px; background: #e8f6f1; border-radius: 14px; cursor: pointer; border: 2px solid transparent; transition: border-color 0.15s; }
+.rec-cat-card:hover { border-color: #0f766e; }
+.rec-cat-photo { width: 56px; height: 56px; object-fit: cover; border-radius: 10px; }
+.rec-cat-avatar { color: #0f766e; }
+.rec-cat-name { font-size: 16px; font-weight: 700; color: #172033; }
+.rec-cat-desc { font-size: 13px; color: #667085; margin-top: 2px; }
+
+.rec-section { background: #fff; padding: 16px; border-radius: 14px; border: 1px solid #e8e5df; }
+.rec-section h4 { margin: 0 0 12px; font-size: 14px; color: #172033; }
+.rec-table-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; }
+.rec-table-card { padding: 12px; border: 2px solid #e8e5df; border-radius: 10px; text-align: center; cursor: pointer; transition: all 0.15s; }
+.rec-table-card:hover { border-color: #0f766e; }
+.rec-table-card.selected { border-color: #0f766e; background: #e8f6f1; }
+.rec-table-code { font-size: 18px; font-weight: 700; }
+.rec-table-info { font-size: 12px; color: #667085; margin-top: 2px; }
+
+.menu-list { display: flex; flex-direction: column; gap: 8px; }
+.menu-card { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f8f9fa; border-radius: 10px; gap: 12px; }
+.menu-photo { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
+.menu-info strong { font-size: 14px; color: #172033; }
+.menu-meta { display: block; font-size: 12px; color: #667085; margin-top: 2px; }
+.menu-right { display: flex; align-items: center; gap: 10px; }
+.menu-price { font-weight: 700; color: #e86f51; font-size: 14px; }
+
+.cart-summary { background: #fff; padding: 16px; border-radius: 14px; border: 2px solid #0f766e; }
+.cart-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
+.cart-total { display: flex; justify-content: space-between; font-weight: 700; font-size: 16px; padding-top: 10px; margin-top: 8px; border-top: 2px solid #e8e5df; color: #172033; }
+</style>

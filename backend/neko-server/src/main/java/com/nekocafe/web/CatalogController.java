@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nekocafe.common.ApiResponse;
 import com.nekocafe.common.Payloads;
 import com.nekocafe.dto.CatHealthRequest;
+import com.nekocafe.mapper.CatHealthRecordMapper;
+import com.nekocafe.mapper.CatalogMapper;
 import com.nekocafe.service.CatService;
 import com.nekocafe.service.CatalogService;
 import com.nekocafe.service.DashboardService;
@@ -13,6 +15,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -33,17 +37,20 @@ public class CatalogController {
     private final RecommendationService recommendationService;
     private final DashboardService dashboardService;
     private final ObjectMapper objectMapper;
+    private final CatalogMapper catalogMapper;
 
     public CatalogController(CatalogService catalogService,
                             CatService catService,
                             RecommendationService recommendationService,
                             DashboardService dashboardService,
-                            ObjectMapper objectMapper) {
+                            ObjectMapper objectMapper,
+                            CatalogMapper catalogMapper) {
         this.catalogService = catalogService;
         this.catService = catService;
         this.recommendationService = recommendationService;
         this.dashboardService = dashboardService;
         this.objectMapper = objectMapper;
+        this.catalogMapper = catalogMapper;
     }
 
     @Operation(summary = "门店列表（含桌位数/座位数，Redis 缓存）")
@@ -112,5 +119,21 @@ public class CatalogController {
     @GetMapping("/dashboard/summary")
     public ApiResponse dashboardSummary(@RequestParam(required = false) Long storeId) {
         return ApiResponse.of(dashboardService.summary(storeId));
+    }
+
+    @Operation(summary = "更新猫咪照片")
+    @PatchMapping("/cats/{id}/photo")
+    public ApiResponse updateCatPhoto(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        String photoUrl = body.get("photoUrl");
+        catalogMapper.updateCatPhoto(id, photoUrl);
+        return ApiResponse.of(Map.of("id", id, "photo_url", photoUrl));
+    }
+
+    @Operation(summary = "更新菜品照片")
+    @PatchMapping("/menu-items/{id}/photo")
+    public ApiResponse updateMenuItemPhoto(@PathVariable Long id, @RequestBody Map<String, String> body) {
+        String photoUrl = body.get("photoUrl");
+        catalogMapper.updateMenuItemPhoto(id, photoUrl);
+        return ApiResponse.of(Map.of("id", id, "photo_url", photoUrl));
     }
 }

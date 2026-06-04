@@ -11,8 +11,11 @@ services:
       SPRING_DATA_REDIS_PORT: "6379"
       NEKO_JWT_SECRET: "${NEKO_JWT_SECRET:-neko-cafe-dev-secret-please-change-in-prod-0123456789abcdef}"
       NEKO_SMS_FIXED_CODE: "${NEKO_SMS_FIXED_CODE:-8888}"
+      NEKO_UPLOAD_DIR: /app/uploads
     ports:
       - "8080:8080"
+    volumes:
+      - uploads-data:/app/uploads
     depends_on:
       mysql:
         condition: service_healthy
@@ -30,13 +33,14 @@ services:
 
   mysql:
     image: mysql:8.4
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     environment:
       MYSQL_DATABASE: neko_cafe
       MYSQL_USER: neko
       MYSQL_PASSWORD: neko
       MYSQL_ROOT_PASSWORD: neko_root
     ports:
-      - "3306:3306"
+      - "3307:3306"
     volumes:
       - mysql-data:/var/lib/mysql
       - ./db/migrations:/docker-entrypoint-initdb.d:ro
@@ -53,3 +57,4 @@ services:
 
 volumes:
   mysql-data:
+  uploads-data:

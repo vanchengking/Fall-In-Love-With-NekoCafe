@@ -1,5 +1,7 @@
 -- NekoCafe 智慧餐饮预约平台初始化脚本
 -- MySQL 8+
+SET NAMES utf8mb4;
+SET CHARACTER SET utf8mb4;
 
 CREATE TABLE IF NOT EXISTS users (
   id BIGINT PRIMARY KEY AUTO_INCREMENT,
