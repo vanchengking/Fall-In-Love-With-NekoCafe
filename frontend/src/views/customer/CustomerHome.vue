@@ -36,7 +36,8 @@
     <section v-if="recommendations.cat" class="rec-section">
       <h2>为你推荐</h2>
       <div class="rec-cat-card">
-        <div class="rec-cat-icon"><Cat :size="32" /></div>
+        <img v-if="recommendations.cat.photo_url" :src="recommendations.cat.photo_url" class="rec-cat-photo" />
+        <div v-else class="rec-cat-icon"><Cat :size="32" /></div>
         <div>
           <h3>{{ recommendations.cat.name }}</h3>
           <p>{{ recommendations.cat.breed }} · {{ recommendations.cat.personality_tags?.join(' / ') }}</p>
@@ -48,6 +49,7 @@
       <h2>人气菜品</h2>
       <div class="menu-grid">
         <div v-for="item in menuItems.slice(0, 4)" :key="item.id" class="menu-card">
+          <img v-if="item.photo_url" :src="item.photo_url" class="menu-photo" />
           <h4>{{ item.name }}</h4>
           <p class="menu-meta">{{ item.category }} · {{ item.tags?.join(' / ') }}</p>
           <span class="menu-price">{{ cents(item.price_cents) }}</span>
@@ -121,6 +123,7 @@ onMounted(async () => {
   display: flex; align-items: center; gap: 16px;
   padding: 20px; background: #e8f6f1; border-radius: 12px;
 }
+.rec-cat-photo { width: 64px; height: 64px; object-fit: cover; border-radius: 12px; flex-shrink: 0; }
 .rec-cat-icon { color: #0f766e; }
 .rec-cat-card h3 { font-size: 18px; margin-bottom: 4px; }
 .rec-cat-card p { color: #667085; font-size: 14px; }
@@ -131,8 +134,9 @@ onMounted(async () => {
 }
 .menu-card {
   padding: 20px; background: #fff; border-radius: 12px;
-  border: 1px solid #e8e5df;
+  border: 1px solid #e8e5df; overflow: hidden;
 }
+.menu-photo { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; margin-bottom: 10px; }
 .menu-card h4 { font-size: 16px; margin-bottom: 6px; }
 .menu-meta { font-size: 13px; color: #667085; margin-bottom: 8px; }
 .menu-price { font-size: 18px; font-weight: 700; color: #e86f51; }

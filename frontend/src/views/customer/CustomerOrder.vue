@@ -4,9 +4,12 @@
     <div class="order-layout">
       <div class="order-menu">
         <div v-for="item in cart.menuItems" :key="item.id" class="menu-item">
-          <div>
-            <strong>{{ item.name }}</strong>
-            <span class="desc">{{ item.category }} · {{ item.tags?.join(' / ') }}</span>
+          <div style="display: flex; align-items: center; gap: 12px">
+            <img v-if="item.photo_url" :src="item.photo_url" class="menu-photo" />
+            <div>
+              <strong>{{ item.name }}</strong>
+              <span class="desc">{{ item.category }} · {{ item.tags?.join(' / ') }}</span>
+            </div>
           </div>
           <div class="item-right">
             <span class="price">{{ cents(item.price_cents) }}</span>
@@ -72,7 +75,8 @@ onMounted(async () => {
 .order-layout { display: grid; grid-template-columns: 1fr 320px; gap: 24px; }
 @media (max-width: 768px) { .order-layout { grid-template-columns: 1fr; } }
 .order-menu { display: flex; flex-direction: column; gap: 10px; }
-.menu-item { display: flex; justify-content: space-between; align-items: center; padding: 16px; background: #fff; border-radius: 10px; border: 1px solid #e8e5df; }
+.menu-item { display: flex; justify-content: space-between; align-items: center; padding: 16px; background: #fff; border-radius: 12px; border: 1px solid #e8e5df; }
+.menu-photo { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
 .desc { display: block; font-size: 13px; color: #667085; margin-top: 2px; }
 .item-right { display: flex; align-items: center; gap: 12px; }
 .price { font-weight: 700; color: #e86f51; }
