@@ -19,6 +19,11 @@ import "./styles.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 
+// JWT（短信验证码沙箱登录后获得）。模块级，供 api() 自动附加 Authorization 头。
+let authToken = null;
+// 演示账号：管理员可贯通顾客/店员/猫咪管家/看板各页操作；RBAC 仍在后端严格生效。
+const DEMO_LOGIN = { mobileNumber: "13800000006", code: "8888" };
+
 const fallback = {
   stores: [
     {
@@ -65,19 +70,39 @@ function tomorrow() {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-    ...options,
-  });
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+  };
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
+  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(body.error?.message || `HTTP ${response.status}`);
   }
   return body.data;
+}
+
+// 短信验证码沙箱登录，获取 JWT。失败不阻塞页面（降级为本地演示数据）。
+async function authenticate() {
+  try {
+    await api("/auth/sms/send", {
+      method: "POST",
+      body: JSON.stringify({ data: { mobileNumber: DEMO_LOGIN.mobileNumber } }),
+    });
+    const result = await api("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ data: DEMO_LOGIN }),
+    });
+    authToken = result?.token || null;
+    return result?.user || null;
+  } catch (error) {
+    authToken = null;
+    return null;
+  }
 }
 
 function cents(value) {
@@ -327,7 +352,10 @@ const App = {
       refreshRecommendations();
     }
 
-    onMounted(loadBaseData);
+    onMounted(async () => {
+      await authenticate();
+      await loadBaseData();
+    });
 
     return {
       activeReservations,

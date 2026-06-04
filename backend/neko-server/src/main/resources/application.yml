@@ -1,0 +1,52 @@
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: neko-server
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/neko_cafe?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8&useUnicode=true}
+    username: ${SPRING_DATASOURCE_USERNAME:neko}
+    password: ${SPRING_DATASOURCE_PASSWORD:neko}
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 30000
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      timeout: 2000ms
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    # 绑定 NULL 参数时使用 JDBC NULL 类型，确保 "#{x} IS NULL" 动态过滤在 MySQL 上稳定工作
+    jdbc-type-for-null: 'null'
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+  api-docs:
+    path: /v3/api-docs
+
+# 应用自定义配置（JWT、短信验证码沙箱、缓存）
+neko:
+  jwt:
+    secret: ${NEKO_JWT_SECRET:neko-cafe-dev-secret-please-change-in-prod-0123456789abcdef}
+    ttl-seconds: ${NEKO_JWT_TTL_SECONDS:86400}
+  sms:
+    # 演示固定验证码；同时写入 Redis，登录时优先校验 Redis 中的验证码
+    fixed-code: ${NEKO_SMS_FIXED_CODE:8888}
+    ttl-seconds: ${NEKO_SMS_TTL_SECONDS:300}
+  cache:
+    stores-ttl-seconds: ${NEKO_CACHE_STORES_TTL:60}
+
+logging:
+  level:
+    root: INFO
+    com.nekocafe: INFO
