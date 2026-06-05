@@ -161,12 +161,12 @@ ALTER TABLE cat_health_records ADD KEY idx_cat_health_records_cat (cat_id, recor
 -- ---------------------------------------------------------------------------
 -- 10. 幂等种子数据：完善猫咪档案 + 新增疫苗/评价/优惠券/支付样例
 -- ---------------------------------------------------------------------------
-UPDATE cats SET photo_url = CONCAT('/assets/cats/', id, '.png'),
+UPDATE cats SET photo_url = CONCAT('/assets/cats/', id, '.svg'),
                 birthday = CURRENT_DATE - INTERVAL (365 * 2 + id * 30) DAY,
                 interactive_status = CASE WHEN health_status = 'healthy' THEN 'interactive' ELSE 'rest' END
 WHERE photo_url IS NULL;
 
-UPDATE menu_items SET photo_url = CONCAT('/assets/menu/', id, '.png')
+UPDATE menu_items SET photo_url = CONCAT('/assets/menu/', id, '.svg')
 WHERE photo_url IS NULL;
 
 INSERT IGNORE INTO vaccine_records (id, cat_id, vaccine_name, vaccinated_at, next_due_at, note)
