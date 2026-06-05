@@ -11,7 +11,7 @@ RUN mvn -B -s settings.xml clean package
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-ENV JAVA_OPTS=""
+ENV JAVA_OPTS="" LANG=C.UTF-8 LC_ALL=C.UTF-8
 COPY --from=build /app/target/neko-server.jar app.jar
 EXPOSE 8080
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
