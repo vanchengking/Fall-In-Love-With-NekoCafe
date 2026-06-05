@@ -55,6 +55,14 @@ services:
     ports:
       - "6379:6379"
 
+  adminer:
+    image: adminer:latest
+    ports:
+      - "8888:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
 volumes:
   mysql-data:
   uploads-data:
