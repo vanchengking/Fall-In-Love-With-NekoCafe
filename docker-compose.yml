@@ -4,9 +4,9 @@ services:
     build: ./backend/neko-server
     environment:
       PORT: 8080
-      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/neko_cafe?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&useUnicode=true"
-      SPRING_DATASOURCE_USERNAME: neko
-      SPRING_DATASOURCE_PASSWORD: neko
+      SPRING_DATASOURCE_URL: "${SPRING_DATASOURCE_URL}"
+      SPRING_DATASOURCE_USERNAME: "${SPRING_DATASOURCE_USERNAME}"
+      SPRING_DATASOURCE_PASSWORD: "${SPRING_DATASOURCE_PASSWORD}"
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: "6379"
       NEKO_JWT_SECRET: "${NEKO_JWT_SECRET:-neko-cafe-dev-secret-please-change-in-prod-0123456789abcdef}"
@@ -17,8 +17,6 @@ services:
     volumes:
       - uploads-data:/app/uploads
     depends_on:
-      mysql:
-        condition: service_healthy
       redis:
         condition: service_started
 
