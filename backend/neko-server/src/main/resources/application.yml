@@ -22,6 +22,11 @@ spring:
     hikari:
       maximum-pool-size: 10
       connection-timeout: 30000
+  flyway:
+    enabled: ${SPRING_FLYWAY_ENABLED:false}
+    locations: ${SPRING_FLYWAY_LOCATIONS:classpath:db/migration}
+    baseline-on-migrate: ${SPRING_FLYWAY_BASELINE_ON_MIGRATE:false}
+    validate-on-migrate: true
   data:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:localhost}

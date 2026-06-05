@@ -4,9 +4,12 @@ services:
     build: ./backend/neko-server
     environment:
       PORT: 8080
-      SPRING_DATASOURCE_URL: "${SPRING_DATASOURCE_URL}"
-      SPRING_DATASOURCE_USERNAME: "${SPRING_DATASOURCE_USERNAME}"
-      SPRING_DATASOURCE_PASSWORD: "${SPRING_DATASOURCE_PASSWORD}"
+      SPRING_DATASOURCE_URL: "${SPRING_DATASOURCE_URL:-jdbc:mysql://mysql:3306/neko_cafe?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&useUnicode=true}"
+      SPRING_DATASOURCE_USERNAME: "${SPRING_DATASOURCE_USERNAME:-neko}"
+      SPRING_DATASOURCE_PASSWORD: "${SPRING_DATASOURCE_PASSWORD:-neko}"
+      SPRING_FLYWAY_ENABLED: "${SPRING_FLYWAY_ENABLED:-true}"
+      SPRING_FLYWAY_LOCATIONS: "filesystem:/app/db/migration"
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: "${SPRING_FLYWAY_BASELINE_ON_MIGRATE:-true}"
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: "6379"
       NEKO_JWT_SECRET: "${NEKO_JWT_SECRET:-neko-cafe-dev-secret-please-change-in-prod-0123456789abcdef}"
@@ -16,6 +19,7 @@ services:
       - "8080:8080"
     volumes:
       - uploads-data:/app/uploads
+      - ./db/migrations:/app/db/migration:ro
     depends_on:
       redis:
         condition: service_started
@@ -30,6 +34,7 @@ services:
       - backend
 
   mysql:
+    profiles: ["local-db"]
     image: mysql:8.4
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     environment:
@@ -41,7 +46,6 @@ services:
       - "3307:3306"
     volumes:
       - mysql-data:/var/lib/mysql
-      - ./db/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uneko -pneko --silent"]
       interval: 5s
@@ -54,6 +58,7 @@ services:
       - "6379:6379"
 
   adminer:
+    profiles: ["local-db"]
     image: adminer:latest
     ports:
       - "8888:8080"
