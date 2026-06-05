@@ -1,47 +1,88 @@
 <template>
   <div>
-    <h2 style="margin-bottom: 20px">人员管理</h2>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px">
+      <h2>人员管理</h2>
+      <el-select v-model="roleFilter" placeholder="角色筛选" clearable style="width: 160px" @change="loadStaff">
+        <el-option label="全部" value="" />
+        <el-option label="店员" value="staff" />
+        <el-option label="店长" value="manager" />
+        <el-option label="运营" value="operator" />
+        <el-option label="猫咪管家" value="cat_keeper" />
+        <el-option label="管理员" value="admin" />
+      </el-select>
+    </div>
+
     <div class="staff-grid">
-      <div v-for="member in staffList" :key="member.phone" class="staff-card">
-        <div class="staff-avatar" :style="{ background: member.color }">{{ member.icon }}</div>
+      <div v-for="member in staffList" :key="member.id" class="staff-card">
+        <div class="staff-avatar" :style="{ background: roleColor(member.role) }">{{ roleIcon(member.role) }}</div>
         <div class="staff-info">
           <h4>{{ member.name }}</h4>
-          <p>{{ member.roleName }}</p>
-          <p class="meta">{{ member.phone }}</p>
+          <p>{{ roleLabel(member.role) }}</p>
+          <p class="meta">{{ member.mobile_number }}</p>
         </div>
-        <el-tag :type="member.tagType" size="small">{{ member.status }}</el-tag>
+        <el-tag :type="member.role === 'admin' ? 'danger' : 'success'" size="small">
+          {{ roleLabel(member.role) }}
+        </el-tag>
       </div>
     </div>
 
-    <div class="panel" style="margin-top: 24px">
-      <h3 style="margin-bottom: 14px">今日排班</h3>
-      <el-table :data="scheduleData" stripe style="width: 100%">
-        <el-table-column prop="name" label="姓名" width="120" />
-        <el-table-column prop="role" label="岗位" width="120" />
-        <el-table-column prop="shift" label="班次" />
-        <el-table-column prop="status" label="状态">
-          <template #default="{ row }">
-            <el-tag :type="row.status === '在岗' ? 'success' : 'info'" size="small">{{ row.status }}</el-tag>
-          </template>
-        </el-table-column>
-      </el-table>
+    <div v-if="staffList.length === 0 && !loading" style="text-align: center; padding: 40px; color: #999">
+      暂无员工数据
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { api } from '@/utils/http'
 
-const staffList = ref([
-  { name: '高店员', phone: '13800000002', roleName: '店员', icon: '🏪', color: '#e0f2fe', status: '在岗', tagType: 'success' as const },
-  { name: '卢猫咪管家', phone: '13800000005', roleName: '猫咪管家', icon: '🐱', color: '#fce7f3', status: '在岗', tagType: 'success' as const },
-])
+interface StaffMember {
+  id: number
+  name: string
+  mobile_number: string
+  role: string
+  member_level: string
+  points: number
+}
 
-const scheduleData = ref([
-  { name: '高店员', role: '店员', shift: '09:00 - 18:00', status: '在岗' },
-  { name: '卢猫咪管家', role: '猫咪管家', shift: '08:00 - 17:00', status: '在岗' },
-  { name: '李店员', role: '店员', shift: '14:00 - 22:00', status: '休息' },
-])
+const staffList = ref<StaffMember[]>([])
+const roleFilter = ref('')
+const loading = ref(false)
+
+const roleMap: Record<string, string> = {
+  staff: '店员', manager: '店长', operator: '总部运营',
+  cat_keeper: '猫咪管家', admin: '管理员', customer: '顾客',
+}
+
+const roleIconMap: Record<string, string> = {
+  staff: '🏪', manager: '👩‍💼', operator: '📊',
+  cat_keeper: '🐱', admin: '⚙️', customer: '👤',
+}
+
+const roleColorMap: Record<string, string> = {
+  staff: '#e0f2fe', manager: '#fef3c7', operator: '#ede9fe',
+  cat_keeper: '#fce7f3', admin: '#fee2e2', customer: '#f0fdf4',
+}
+
+function roleLabel(r: string) { return roleMap[r] || r }
+function roleIcon(r: string) { return roleIconMap[r] || '👤' }
+function roleColor(r: string) { return roleColorMap[r] || '#f3f4f6' }
+
+async function loadStaff() {
+  loading.value = true
+  try {
+    const params: Record<string, string> = {}
+    if (roleFilter.value) params.role = roleFilter.value
+    else params.role = 'staff,manager,operator,cat_keeper,admin'
+    staffList.value = await api.get<StaffMember[]>('/users', params)
+  } catch {
+    staffList.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadStaff)
 </script>
 
 <style scoped>
@@ -51,5 +92,4 @@ const scheduleData = ref([
 .staff-info h4 { font-size: 15px; margin-bottom: 2px; }
 .staff-info p { font-size: 13px; color: #667085; }
 .meta { font-size: 12px !important; font-family: monospace; }
-.panel { background: #fff; padding: 20px; border-radius: 12px; border: 1px solid #e8e5df; }
 </style>
