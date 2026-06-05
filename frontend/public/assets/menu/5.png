@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <rect width="200" height="200" rx="16" fill="#E3F2FD"/>
+  <text x="100" y="55" text-anchor="middle" font-size="50">🧁</text>
+  <text x="100" y="115" text-anchor="middle" font-family="sans-serif" font-size="22" fill="#1565C0" font-weight="bold">布偶蓝莓松饼</text>
+  <text x="100" y="145" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#42A5F5">西直门店限定 · ¥39</text>
+</svg>

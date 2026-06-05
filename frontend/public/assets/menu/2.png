@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <rect width="200" height="200" rx="16" fill="#FFEBEE"/>
+  <text x="100" y="55" text-anchor="middle" font-size="50">🍣</text>
+  <text x="100" y="115" text-anchor="middle" font-family="sans-serif" font-size="22" fill="#C62828" font-weight="bold">三文鱼能量碗</text>
+  <text x="100" y="145" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#E57373">健康主食 · ¥58</text>
+</svg>

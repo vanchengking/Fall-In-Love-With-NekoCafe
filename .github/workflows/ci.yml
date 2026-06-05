@@ -37,7 +37,7 @@ jobs:
         with:
           node-version: 20
       - run: npm --prefix frontend install
-      - run: npm --prefix frontend build
+      - run: npm --prefix frontend run build
 
   # Docker 构建检查：确保正式后端镜像可成功构建（构建过程含 mvn package 测试）
   docker-build:

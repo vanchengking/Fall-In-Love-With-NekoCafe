@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <rect width="200" height="200" rx="16" fill="#E0F7FA"/>
+  <text x="100" y="55" text-anchor="middle" font-size="50">🥛</text>
+  <text x="100" y="115" text-anchor="middle" font-family="sans-serif" font-size="22" fill="#00695C" font-weight="bold">低敏燕麦奶</text>
+  <text x="100" y="145" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#26A69A">纯素饮品 · ¥28</text>
+</svg>

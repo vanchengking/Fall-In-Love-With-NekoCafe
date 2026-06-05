@@ -14,6 +14,12 @@ ALTER TABLE cats
   ADD COLUMN interactive_status VARCHAR(24) NOT NULL DEFAULT 'interactive' AFTER health_status;
 
 -- ---------------------------------------------------------------------------
+-- 1b. 菜品增加照片字段
+-- ---------------------------------------------------------------------------
+ALTER TABLE menu_items
+  ADD COLUMN photo_url VARCHAR(255) NULL AFTER tags;
+
+-- ---------------------------------------------------------------------------
 -- 2. 预约状态机扩展为 created -> booked -> seated -> dining -> finished/cancelled/no_show
 --    重建占位生成列，使 created/booked/seated/dining 视为占用桌位的活跃状态。
 --    新增"同一用户同一门店同一时段"唯一约束（活跃状态下）。
@@ -158,6 +164,9 @@ ALTER TABLE cat_health_records ADD KEY idx_cat_health_records_cat (cat_id, recor
 UPDATE cats SET photo_url = CONCAT('/assets/cats/', id, '.png'),
                 birthday = CURRENT_DATE - INTERVAL (365 * 2 + id * 30) DAY,
                 interactive_status = CASE WHEN health_status = 'healthy' THEN 'interactive' ELSE 'rest' END
+WHERE photo_url IS NULL;
+
+UPDATE menu_items SET photo_url = CONCAT('/assets/menu/', id, '.png')
 WHERE photo_url IS NULL;
 
 INSERT IGNORE INTO vaccine_records (id, cat_id, vaccine_name, vaccinated_at, next_due_at, note)

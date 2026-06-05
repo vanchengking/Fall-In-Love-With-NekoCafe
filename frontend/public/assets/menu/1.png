@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <rect width="200" height="200" rx="16" fill="#FFF8E1"/>
+  <text x="100" y="55" text-anchor="middle" font-size="50">☕</text>
+  <text x="100" y="115" text-anchor="middle" font-family="sans-serif" font-size="22" fill="#5D4037" font-weight="bold">猫爪拿铁</text>
+  <text x="100" y="145" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#8D6E63">招牌咖啡 · ¥32</text>
+</svg>
