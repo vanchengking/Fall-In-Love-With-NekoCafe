@@ -4,7 +4,7 @@ services:
     build: ./backend/neko-server
     environment:
       PORT: 8080
-      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/neko_cafe?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8&useUnicode=true"
+      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/neko_cafe?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8&useUnicode=true"
       SPRING_DATASOURCE_USERNAME: neko
       SPRING_DATASOURCE_PASSWORD: neko
       SPRING_DATA_REDIS_HOST: redis
