@@ -10,6 +10,7 @@ import com.nekocafe.mapper.CatalogMapper;
 import com.nekocafe.mapper.OrderItemMapper;
 import com.nekocafe.mapper.OrderMapper;
 import com.nekocafe.mapper.PaymentTransactionMapper;
+import com.nekocafe.mapper.ReservationMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,15 +29,18 @@ public class OrderService {
     private final OrderItemMapper orderItemMapper;
     private final PaymentTransactionMapper paymentTransactionMapper;
     private final CatalogMapper catalogMapper;
+    private final ReservationMapper reservationMapper;
 
     public OrderService(OrderMapper orderMapper,
                         OrderItemMapper orderItemMapper,
                         PaymentTransactionMapper paymentTransactionMapper,
-                        CatalogMapper catalogMapper) {
+                        CatalogMapper catalogMapper,
+                        ReservationMapper reservationMapper) {
         this.orderMapper = orderMapper;
         this.orderItemMapper = orderItemMapper;
         this.paymentTransactionMapper = paymentTransactionMapper;
         this.catalogMapper = catalogMapper;
+        this.reservationMapper = reservationMapper;
     }
 
     public List<Map<String, Object>> list(Long storeId) {
@@ -50,7 +54,7 @@ public class OrderService {
             throw ApiException.badRequest("reservationId and items are required");
         }
 
-        Map<String, Object> reservation = catalogMapper.getReservationDetail(request.reservationId());
+        Map<String, Object> reservation = reservationMapper.getReservationDetail(request.reservationId());
         if (reservation == null) {
             throw ApiException.notFound("reservation " + request.reservationId() + " not found");
         }

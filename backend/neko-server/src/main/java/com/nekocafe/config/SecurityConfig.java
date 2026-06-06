@@ -43,6 +43,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/**").permitAll()
                         .requestMatchers(HttpMethod.PATCH, "/api/reservations/*/status")
                             .hasAnyRole("STAFF", "MANAGER", "OPERATOR", "ADMIN")
+                        // 取消接口对所有登录用户开放，由服务层校验本人/后台角色
+                        .requestMatchers(HttpMethod.PATCH, "/api/reservations/*/cancel")
+                            .authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/cat-health-records")
                             .hasAnyRole("CAT_KEEPER", "MANAGER", "ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/upload").authenticated()

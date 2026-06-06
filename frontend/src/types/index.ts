@@ -46,7 +46,7 @@ export interface MenuItem {
   score?: number
 }
 
-export type ReservationStatus = 'booked' | 'seated' | 'dining' | 'finished' | 'cancelled' | 'no_show'
+export type ReservationStatus = 'created' | 'booked' | 'seated' | 'dining' | 'finished' | 'cancelled' | 'no_show'
 
 export interface Reservation {
   id: number
@@ -58,6 +58,7 @@ export interface Reservation {
   reservation_time: string
   party_size: number
   status: ReservationStatus
+  status_label?: string
   note: string
   customer_name?: string
   customerName?: string

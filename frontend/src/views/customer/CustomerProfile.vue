@@ -16,10 +16,10 @@
           <el-tab-pane label="我的预约" name="reservations">
             <div v-for="r in reservations" :key="r.id" class="res-item">
               <div class="res-left">
-                <el-tag :type="statusType(r.status)" size="small">{{ statusLabel(r.status) }}</el-tag>
+                <el-tag :type="statusType(r.status)" size="small">{{ r.status_label || statusLabel(r.status) }}</el-tag>
                 <span>{{ r.reservation_date }} {{ r.reservation_time }} · {{ r.party_size }}人 · {{ r.table_code || '待分配' }}</span>
               </div>
-              <el-button v-if="r.status === 'booked'" type="danger" plain size="small" @click="cancelReservation(r)">取消预约</el-button>
+              <el-button v-if="r.status === 'created' || r.status === 'booked'" type="danger" plain size="small" @click="cancelReservation(r)">取消预约</el-button>
             </div>
             <el-empty v-if="!reservations.length" description="暂无预约" />
           </el-tab-pane>
@@ -60,7 +60,8 @@ function handleLogout() { auth.logout(); router.push('/login') }
 async function cancelReservation(r: Reservation) {
   try {
     await ElMessageBox.confirm('确定要取消这个预约吗？', '取消预约', { type: 'warning' })
-    const updated = await api.patch<Reservation>(`/reservations/${r.id}/status`, { status: 'cancelled' })
+    // 顾客取消走专用接口：需登录，服务层校验本人且仅 created/booked 可取消
+    const updated = await api.patch<Reservation>(`/reservations/${r.id}/cancel`)
     reservations.value = reservations.value.map(x => x.id === updated.id ? updated : x)
     ElMessage.success('预约已取消')
   } catch (e) {

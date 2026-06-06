@@ -99,11 +99,14 @@ public class CatalogController {
         return ApiResponse.of(catalogService.listVaccineRecords(catId));
     }
 
-    @Operation(summary = "规则型推荐（人-桌-菜-猫匹配）")
+    @Operation(summary = "规则型推荐（人-桌-菜-猫四维匹配）")
     @GetMapping("/recommendations")
     public ApiResponse recommendations(@RequestParam(required = false) Long userId,
                                        @RequestParam(required = false) Long storeId,
-                                       @RequestParam(required = false) String preferences) {
+                                       @RequestParam(required = false) String preferences,
+                                       @RequestParam(required = false) String date,
+                                       @RequestParam(required = false) String time,
+                                       @RequestParam(required = false) Integer partySize) {
         List<String> prefs = new ArrayList<>();
         if (preferences != null && !preferences.isBlank()) {
             for (String tag : preferences.split(",")) {
@@ -112,7 +115,7 @@ public class CatalogController {
                 }
             }
         }
-        return ApiResponse.of(recommendationService.recommend(userId, storeId, prefs));
+        return ApiResponse.of(recommendationService.recommend(userId, storeId, prefs, date, time, partySize));
     }
 
     @Operation(summary = "运营看板汇总")

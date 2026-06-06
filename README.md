@@ -57,7 +57,7 @@ docker compose up --build
 4. 店员：今日预约看板（10秒自动刷新）→ 入座/完桌操作 → 订单管理
 5. 管理员：数据看板（ECharts 图表）→ 猫咪档案管理（照片上传 + 体重趋势图）→ 门店管理
 
-预约状态机：`booked → seated → finished / cancelled / no_show`，非法跳转会被拒绝。
+预约状态机：`created → booked → seated → dining → finished / cancelled / no_show`，完桌必须经过 `dining`，非法跳转返回 400、重复预约返回 409。数据库与 API 统一存英文状态，前端展示对应中文标签。
 
 ## 前端架构
 
@@ -148,7 +148,7 @@ backend/neko-server/src/main/java/com/nekocafe/
     └── UploadController.java        # 文件上传
 ```
 
-## API 端点总览（18个）
+## API 端点总览
 
 | 方法 | 路径 | 权限 | 说明 |
 |------|------|------|------|
@@ -165,8 +165,9 @@ backend/neko-server/src/main/java/com/nekocafe/
 | GET | /api/dashboard/summary | 公开 | 运营看板汇总 |
 | GET | /api/reservations | 公开 | 预约列表 |
 | POST | /api/reservations | 需登录 | 创建预约 |
-| PATCH | /api/reservations/{id}/status | staff/manager/operator/admin | 预约状态流转 |
-| GET | /api/reservations/{id}/events | 公开 | 预约事件日志 |
+| PATCH | /api/reservations/{id}/status | staff/manager/operator/admin | 预约状态流转（严格状态机） |
+| PATCH | /api/reservations/{id}/cancel | 需登录 | 取消预约（顾客取消本人 created/booked，后台可代客取消） |
+| GET | /api/reservations/{id}/events | 公开 | 预约事件日志（含 created_at 与中文状态标签） |
 | GET | /api/orders | 公开 | 订单列表 |
 | POST | /api/orders | 需登录 | 创建订单+支付沙箱 |
 | GET | /api/reviews | 公开 | 评价列表 |
@@ -182,7 +183,7 @@ backend/neko-server/src/main/java/com/nekocafe/
 | M1 用户与会员 | Login.vue, CustomerProfile.vue | SMS 登录、JWT 持久化、会员等级/积分展示、偏好标签 |
 | M2 门店与桌位 | CustomerStores.vue, CustomerStoreDetail.vue, StaffTables.vue | 门店列表、猫咪/桌位/菜单详情、可视化选桌、排队显示 |
 | M3 预约与点单 | CustomerReservation.vue, CustomerOrder.vue, CustomerPayment.vue | 可视化选桌+偏好标签+推荐、购物车、支付沙箱 |
-| M4 订单与履约 | CustomerProfile.vue, StaffOrders.vue | 订单列表、取消预约、状态机（booked→seated→finished） |
+| M4 订单与履约 | CustomerProfile.vue, StaffOrders.vue | 订单列表、取消预约、状态机（created→booked→seated→dining→finished） |
 | M5 店员后台 | StaffToday.vue, StaffReservations.vue, StaffOrders.vue | 今日看板（10s轮询）、预约/订单管理、异常告警 |
 | M6 数据看板 | AdminDashboard.vue | KPI卡片、ECharts柱状图/饼图/折线图、告警+评价 |
 
@@ -197,9 +198,13 @@ backend/neko-server/src/main/java/com/nekocafe/
 
 ## 数据库
 
-- Schema：`db/migrations/V001__init.sql` + `V002__d01_upgrade.sql`
+- Schema 迁移（Flyway 按文件名顺序执行）：
+  - `db/migrations/V001__init.sql`：基础表结构与初始种子。
+  - `db/migrations/V002__d01_upgrade.sql`：D-01 升级——预约状态机扩展（活跃状态 `created/booked/seated/dining`）、桌位/用户双重活跃唯一约束、`reservation_events` 审计表等。
+  - `db/migrations/V003__reservation_backend_completion.sql`：预约后台补全——新增推荐日志表 `recommendation_logs`、`reservation_events` 状态索引，并幂等兜底唯一约束（兼容已执行过 V001/V002 的库）。
+- 演示数据：`db/seed_data.sql`（非 Flyway 管理，按需手动导入）——审计事件遵循 `booked→seated→dining→finished` 状态机口径。
 - MySQL 字符集：`utf8mb4`（docker-compose 中配置 `--character-set-server=utf8mb4`）
-- 种子数据包含：6个用户、2个门店、3只猫、3道菜品、17条预约、11个订单、12条评价、12条健康记录
+- 种子数据包含：6个用户、2个门店、4只猫、5道菜品、17条预约、11个订单、12条评价、12条健康记录
 
 ## 本地开发
 

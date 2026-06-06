@@ -87,88 +87,6 @@ public interface CatalogMapper {
             """)
     List<Map<String, Object>> listVaccineRecords(@Param("catId") Long catId);
 
-    @Select("""
-            SELECT r.id, r.user_id, r.store_id, r.table_id, r.recommended_cat_id,
-                   DATE_FORMAT(r.reservation_date, '%Y-%m-%d') AS reservation_date,
-                   DATE_FORMAT(r.reservation_time, '%H:%i') AS reservation_time,
-                   r.party_size, r.status, r.note,
-                   u.name AS customer_name, u.mobile_number,
-                   s.name AS store_name, t.code AS table_code, c.name AS cat_name
-            FROM reservations r
-            JOIN users u ON u.id = r.user_id
-            JOIN stores s ON s.id = r.store_id
-            LEFT JOIN dining_tables t ON t.id = r.table_id
-            LEFT JOIN cats c ON c.id = r.recommended_cat_id
-            WHERE (#{date} IS NULL OR r.reservation_date = #{date})
-              AND (#{mobile} IS NULL OR REPLACE(REPLACE(REPLACE(REPLACE(u.mobile_number, '(', ''), ')', ''), ' ', ''), '-', '') LIKE CONCAT('%', #{mobile}, '%'))
-              AND (#{storeId} IS NULL OR r.store_id = #{storeId})
-              AND (#{status} IS NULL OR r.status = #{status})
-            ORDER BY r.reservation_date, r.reservation_time
-            """)
-    List<Map<String, Object>> listReservations(@Param("date") String date,
-                                               @Param("mobile") String mobile,
-                                               @Param("storeId") Long storeId,
-                                               @Param("status") String status);
-
-    @Select("""
-            SELECT r.id, r.user_id, r.store_id, r.table_id, r.recommended_cat_id,
-                   DATE_FORMAT(r.reservation_date, '%Y-%m-%d') AS reservation_date,
-                   DATE_FORMAT(r.reservation_time, '%H:%i') AS reservation_time,
-                   r.party_size, r.status, r.note,
-                   u.name AS customer_name, u.mobile_number,
-                   s.name AS store_name, t.code AS table_code, c.name AS cat_name
-            FROM reservations r
-            JOIN users u ON u.id = r.user_id
-            JOIN stores s ON s.id = r.store_id
-            LEFT JOIN dining_tables t ON t.id = r.table_id
-            LEFT JOIN cats c ON c.id = r.recommended_cat_id
-            WHERE r.id = #{id}
-            """)
-    Map<String, Object> getReservationDetail(@Param("id") Long id);
-
-    @Select("""
-            SELECT id, store_id, code, seats, area, cat_zone, status
-            FROM dining_tables
-            WHERE id = #{tableId} AND store_id = #{storeId} AND seats >= #{partySize}
-            FOR UPDATE
-            """)
-    Map<String, Object> findTableByIdForUpdate(@Param("tableId") Long tableId,
-                                              @Param("storeId") Long storeId,
-                                              @Param("partySize") Integer partySize);
-
-    @Select("""
-            SELECT t.id, t.store_id, t.code, t.seats, t.area, t.cat_zone, t.status
-            FROM dining_tables t
-            WHERE t.store_id = #{storeId}
-              AND t.seats >= #{partySize}
-              AND t.status = 'available'
-              AND NOT EXISTS (
-                SELECT 1 FROM reservations r
-                WHERE r.table_id = t.id
-                  AND r.reservation_date = #{date}
-                  AND r.reservation_time = #{time}
-                  AND r.status IN ('created', 'booked', 'seated', 'dining')
-              )
-            ORDER BY t.cat_zone DESC, t.seats ASC, t.code ASC
-            LIMIT 1
-            FOR UPDATE SKIP LOCKED
-            """)
-    Map<String, Object> findAvailableTableForUpdate(@Param("storeId") Long storeId,
-                                                    @Param("partySize") Integer partySize,
-                                                    @Param("date") String date,
-                                                    @Param("time") String time);
-
-    @Select("""
-            SELECT COUNT(*) FROM reservations
-            WHERE table_id = #{tableId}
-              AND reservation_date = #{date}
-              AND reservation_time = #{time}
-              AND status IN ('created', 'booked', 'seated', 'dining')
-            """)
-    int countActiveOnSlot(@Param("tableId") Long tableId,
-                          @Param("date") String date,
-                          @Param("time") String time);
-
     @Select("<script>SELECT id, price_cents FROM menu_items WHERE id IN "
             + "<foreach item='id' collection='ids' open='(' separator=',' close=')'>#{id}</foreach></script>")
     List<Map<String, Object>> selectMenuByIds(@Param("ids") List<Long> ids);
@@ -217,12 +135,6 @@ public interface CatalogMapper {
             LIMIT 5
             """)
     List<Map<String, Object>> listAlerts(@Param("storeId") Long storeId);
-
-    @org.apache.ibatis.annotations.Insert("""
-            INSERT INTO operation_alerts (store_id, level, title, detail)
-            VALUES (#{storeId}, 'info', '顾客已入座', CONCAT('预约 #', #{reservationId}, ' 已确认入座。'))
-            """)
-    void insertSeatedAlert(@Param("storeId") Long storeId, @Param("reservationId") Long reservationId);
 
     @org.apache.ibatis.annotations.Update("UPDATE cats SET photo_url = #{photoUrl} WHERE id = #{id}")
     void updateCatPhoto(@Param("id") Long id, @Param("photoUrl") String photoUrl);

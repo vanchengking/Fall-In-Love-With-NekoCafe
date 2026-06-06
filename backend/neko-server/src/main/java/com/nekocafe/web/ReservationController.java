@@ -60,6 +60,13 @@ public class ReservationController {
         return ApiResponse.of(reservationService.updateStatus(id, status == null ? null : String.valueOf(status), actor));
     }
 
+    @Operation(summary = "取消预约：顾客取消本人 created/booked 预约，后台角色可代客取消")
+    @PatchMapping("/{id}/cancel")
+    public ApiResponse cancel(@PathVariable Long id,
+                              @AuthenticationPrincipal AuthUser actor) {
+        return ApiResponse.of(reservationService.cancel(id, actor));
+    }
+
     @Operation(summary = "预约状态变更事件记录")
     @GetMapping("/{id}/events")
     public ApiResponse events(@PathVariable Long id) {

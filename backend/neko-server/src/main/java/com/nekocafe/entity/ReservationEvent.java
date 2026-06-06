@@ -1,8 +1,11 @@
 package com.nekocafe.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+
+import java.time.LocalDateTime;
 
 @TableName("reservation_events")
 public class ReservationEvent {
@@ -15,6 +18,9 @@ public class ReservationEvent {
     private String actorRole;
     private Long actorUserId;
     private String note;
+    /** 由数据库 DEFAULT CURRENT_TIMESTAMP 维护，插入时无需赋值；仅在回查时填充。 */
+    @TableField(insertStrategy = com.baomidou.mybatisplus.annotation.FieldStrategy.NEVER)
+    private LocalDateTime createdAt;
 
     public ReservationEvent() {
     }
@@ -49,4 +55,7 @@ public class ReservationEvent {
 
     public String getNote() { return note; }
     public void setNote(String note) { this.note = note; }
+
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

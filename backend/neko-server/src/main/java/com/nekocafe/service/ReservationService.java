@@ -11,7 +11,6 @@ import com.nekocafe.dto.ReservationRequest;
 import com.nekocafe.entity.Reservation;
 import com.nekocafe.entity.ReservationEvent;
 import com.nekocafe.entity.User;
-import com.nekocafe.mapper.CatalogMapper;
 import com.nekocafe.mapper.ReservationEventMapper;
 import com.nekocafe.mapper.ReservationMapper;
 import com.nekocafe.mapper.UserMapper;
@@ -25,31 +24,34 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class ReservationService {
 
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
+    /** 可代客取消/流转预约的后台角色。 */
+    private static final Set<String> STAFF_ROLES = Set.of("staff", "manager", "operator", "admin");
 
     private final ReservationMapper reservationMapper;
     private final ReservationEventMapper reservationEventMapper;
-    private final CatalogMapper catalogMapper;
     private final UserMapper userMapper;
 
     public ReservationService(ReservationMapper reservationMapper,
                               ReservationEventMapper reservationEventMapper,
-                              CatalogMapper catalogMapper,
                               UserMapper userMapper) {
         this.reservationMapper = reservationMapper;
         this.reservationEventMapper = reservationEventMapper;
-        this.catalogMapper = catalogMapper;
         this.userMapper = userMapper;
     }
 
     public List<Map<String, Object>> list(String date, String mobileNumber, Long storeId, String status) {
         String mobile = (mobileNumber == null || mobileNumber.isBlank())
                 ? null : ReservationValidator.normalizeMobile(mobileNumber);
-        return catalogMapper.listReservations(emptyToNull(date), mobile, storeId, emptyToNull(status));
+        List<Map<String, Object>> rows =
+                reservationMapper.listReservations(emptyToNull(date), mobile, storeId, emptyToNull(status));
+        rows.forEach(ReservationService::decorate);
+        return rows;
     }
 
     @Transactional
@@ -58,18 +60,21 @@ public class ReservationService {
 
         User user = upsertCustomer(r);
 
-        Map<String, Object> table = (r.tableId() != null)
-                ? catalogMapper.findTableByIdForUpdate(r.tableId(), r.storeId(), r.partySize())
-                : catalogMapper.findAvailableTableForUpdate(r.storeId(), r.partySize(), r.reservationDate(), r.reservationTime());
+        boolean manual = r.tableId() != null;
+        Map<String, Object> table = manual
+                ? reservationMapper.findTableByIdForUpdate(r.tableId(), r.storeId(), r.partySize())
+                : reservationMapper.findAvailableTableForUpdate(r.storeId(), r.partySize(), r.reservationDate(), r.reservationTime());
 
         if (table == null) {
-            throw ApiException.conflict("no available table for the selected slot and party size");
+            throw manual
+                    ? ApiException.conflict("所选桌位不可用（不存在/容量不足/已停用），请重新选择桌位")
+                    : ApiException.conflict("暂无满足该时段与人数的可用桌位，请调整时间或人数");
         }
         Long tableId = Normalizer.toLong(table.get("id"));
         String tableCode = String.valueOf(table.get("code"));
 
-        if (catalogMapper.countActiveOnSlot(tableId, r.reservationDate(), r.reservationTime()) > 0) {
-            throw ApiException.conflict("selected table is already reserved for this time slot");
+        if (reservationMapper.countActiveOnSlot(tableId, r.reservationDate(), r.reservationTime()) > 0) {
+            throw ApiException.conflict("该桌位在该时段已被预约，请重新选择桌位或时间");
         }
 
         Reservation reservation = new Reservation();
@@ -86,73 +91,130 @@ public class ReservationService {
         try {
             reservationMapper.insert(reservation);
         } catch (DuplicateKeyException ex) {
-            // 命中 table-slot 或 user-store-slot 唯一约束（并发/重复预约）
-            throw ApiException.conflict("this slot is already reserved (duplicate booking)");
+            // 命中 table-slot 或 user-store-slot 唯一约束（并发/重复预约），数据库兜底防重复
+            throw ApiException.conflict("该时段已被预约，请重新选择桌位或时间");
         }
 
+        // 按 D-01 报告口径写两条审计事件：null -> created -> booked
+        reservationEventMapper.insert(new ReservationEvent(
+                reservation.getId(), null, ReservationStatus.CREATED.value(),
+                "customer", user.getId(), "预约已创建"));
         reservationEventMapper.insert(new ReservationEvent(
                 reservation.getId(), ReservationStatus.CREATED.value(), ReservationStatus.BOOKED.value(),
-                "customer", user.getId(), "预约创建"));
+                "customer", user.getId(), "桌位已分配，预约已确认"));
 
-        Map<String, Object> detail = catalogMapper.getReservationDetail(reservation.getId());
+        Map<String, Object> detail = decorate(reservationMapper.getReservationDetail(reservation.getId()));
         if (detail != null) {
             detail.putIfAbsent("table_code", tableCode);
         }
         return detail;
     }
 
+    /** 后台状态流转（staff/manager/operator/admin）。 */
     @Transactional
     public Map<String, Object> updateStatus(Long id, String nextStatusRaw, AuthUser actor) {
         Reservation current = reservationMapper.selectForUpdate(id);
         if (current == null) {
-            throw ApiException.notFound("reservation " + id + " not found");
+            throw ApiException.notFound("预约 " + id + " 不存在");
+        }
+        ReservationStatus to = ReservationStatus.from(nextStatusRaw)
+                .orElseThrow(() -> ApiException.badRequest("无法识别的预约状态：" + nextStatusRaw));
+        return applyTransition(current, to, actor, null);
+    }
+
+    /**
+     * 取消预约：顾客可取消本人的 {@code created/booked} 预约，后台角色可代客取消。
+     */
+    @Transactional
+    public Map<String, Object> cancel(Long id, AuthUser actor) {
+        Reservation current = reservationMapper.selectForUpdate(id);
+        if (current == null) {
+            throw ApiException.notFound("预约 " + id + " 不存在");
+        }
+        boolean staff = isStaff(actor);
+        boolean owner = actor != null && actor.id() != null && actor.id().equals(current.getUserId());
+        if (!staff && !owner) {
+            throw ApiException.forbidden("无权取消该预约");
         }
 
         ReservationStatus from = ReservationStatus.from(current.getStatus())
-                .orElseThrow(() -> ApiException.badRequest("unknown current status: " + current.getStatus()));
-        ReservationStatus to = ReservationStatus.from(nextStatusRaw)
-                .orElseThrow(() -> ApiException.badRequest("unknown reservation status: " + nextStatusRaw));
-
-        if (!ReservationStateMachine.canTransition(from, to)) {
-            throw ApiException.badRequest(
-                    "reservation cannot transition from " + from.value() + " to " + to.value());
+                .orElseThrow(() -> ApiException.badRequest("无法识别的当前状态：" + current.getStatus()));
+        // 顾客仅能取消尚未入座的预约；后台角色由状态机决定可取消范围
+        if (!staff && from != ReservationStatus.CREATED && from != ReservationStatus.BOOKED) {
+            throw ApiException.badRequest("仅可取消「待确认」或「已预约」状态的预约");
         }
 
-        reservationMapper.update(null, new UpdateWrapper<Reservation>()
-                .eq("id", id)
-                .set("status", to.value()));
-
-        reservationEventMapper.insert(new ReservationEvent(
-                id, from.value(), to.value(),
-                actor == null ? null : actor.role(),
-                actor == null ? null : actor.id(),
-                "状态变更"));
-
-        if (to == ReservationStatus.SEATED) {
-            catalogMapper.insertSeatedAlert(current.getStoreId(), id);
-        }
-
-        return catalogMapper.getReservationDetail(id);
+        String note = (owner && !staff) ? "顾客取消预约" : "取消预约";
+        return applyTransition(current, ReservationStatus.CANCELLED, actor, note);
     }
 
     public List<Map<String, Object>> events(Long reservationId) {
-        return new ArrayList<>(reservationEventMapper.selectList(
-                new QueryWrapper<ReservationEvent>()
-                        .eq("reservation_id", reservationId)
-                        .orderByAsc("created_at", "id"))
-                .stream()
-                .map(e -> {
-                    Map<String, Object> m = new java.util.LinkedHashMap<>();
-                    m.put("id", e.getId());
-                    m.put("reservation_id", e.getReservationId());
-                    m.put("from_status", e.getFromStatus());
-                    m.put("to_status", e.getToStatus());
-                    m.put("actor_role", e.getActorRole());
-                    m.put("actor_user_id", e.getActorUserId());
-                    m.put("note", e.getNote());
-                    return m;
-                })
-                .toList());
+        List<Map<String, Object>> rows = reservationMapper.listEvents(reservationId);
+        for (Map<String, Object> row : rows) {
+            row.put("from_status_label", ReservationStatus.labelOf(asString(row.get("from_status"))));
+            row.put("to_status_label", ReservationStatus.labelOf(asString(row.get("to_status"))));
+        }
+        return rows;
+    }
+
+    /** 校验状态机后写库 + 审计事件 + 入座提醒，返回带中文标签的预约详情。 */
+    private Map<String, Object> applyTransition(Reservation current, ReservationStatus to, AuthUser actor, String note) {
+        ReservationStatus from = ReservationStatus.from(current.getStatus())
+                .orElseThrow(() -> ApiException.badRequest("无法识别的当前状态：" + current.getStatus()));
+
+        if (!ReservationStateMachine.canTransition(from, to)) {
+            throw ApiException.badRequest(
+                    "预约不能从「" + from.label() + "」流转到「" + to.label() + "」");
+        }
+
+        reservationMapper.update(null, new UpdateWrapper<Reservation>()
+                .eq("id", current.getId())
+                .set("status", to.value()));
+
+        reservationEventMapper.insert(new ReservationEvent(
+                current.getId(), from.value(), to.value(),
+                actor == null ? null : actor.role(),
+                actor == null ? null : actor.id(),
+                note == null ? defaultNote(to) : note));
+
+        if (to == ReservationStatus.SEATED) {
+            reservationMapper.insertSeatedAlert(current.getStoreId(), current.getId());
+        }
+
+        return decorate(reservationMapper.getReservationDetail(current.getId()));
+    }
+
+    /** 按目标状态给出与动作一致的中文备注。 */
+    private static String defaultNote(ReservationStatus to) {
+        return switch (to) {
+            case CREATED -> "预约已创建";
+            case BOOKED -> "桌位已分配，预约已确认";
+            case SEATED -> "顾客已入座";
+            case DINING -> "开始用餐";
+            case FINISHED -> "用餐完成";
+            case CANCELLED -> "取消预约";
+            case NO_SHOW -> "标记未到店";
+        };
+    }
+
+    private static boolean isStaff(AuthUser actor) {
+        return actor != null && actor.role() != null
+                && STAFF_ROLES.contains(actor.role().toLowerCase());
+    }
+
+    /** 给预约 Map 补充中文状态标签（数据库仍存英文）。 */
+    private static Map<String, Object> decorate(Map<String, Object> row) {
+        if (row != null) {
+            Object status = row.get("status");
+            if (status != null) {
+                row.put("status_label", ReservationStatus.labelOf(String.valueOf(status)));
+            }
+        }
+        return row;
+    }
+
+    private static String asString(Object value) {
+        return value == null ? null : String.valueOf(value);
     }
 
     private User upsertCustomer(ReservationValidator.Normalized r) {

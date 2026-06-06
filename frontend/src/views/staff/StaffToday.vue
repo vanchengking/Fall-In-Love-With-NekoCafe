@@ -15,22 +15,28 @@
     <div class="filter-bar">
       <el-radio-group v-model="statusFilter" @change="loadReservations">
         <el-radio-button value="">全部</el-radio-button>
-        <el-radio-button value="booked">待确认</el-radio-button>
+        <el-radio-button value="created">待确认</el-radio-button>
+        <el-radio-button value="booked">已预约</el-radio-button>
         <el-radio-button value="seated">已入座</el-radio-button>
+        <el-radio-button value="dining">用餐中</el-radio-button>
         <el-radio-button value="finished">已完成</el-radio-button>
+        <el-radio-button value="cancelled">已取消</el-radio-button>
+        <el-radio-button value="no_show">未到店</el-radio-button>
       </el-radio-group>
     </div>
     <div class="res-list">
       <div v-for="r in reservations" :key="r.id" class="res-card">
         <div class="res-info">
-          <el-tag :type="statusType(r.status)" size="small">{{ statusLabel(r.status) }}</el-tag>
+          <el-tag :type="statusType(r.status)" size="small">{{ r.status_label || statusLabel(r.status) }}</el-tag>
           <h4>{{ r.customer_name || r.customerName }}</h4>
           <p>{{ r.reservation_date }} {{ r.reservation_time }} · {{ r.party_size }}人 · {{ r.table_code || '待分配' }}</p>
         </div>
         <div class="res-actions">
           <el-button size="small" type="success" :disabled="r.status !== 'booked'" @click="updateStatus(r, 'seated')">入座</el-button>
-          <el-button size="small" :disabled="r.status !== 'seated'" @click="updateStatus(r, 'finished')">完桌</el-button>
-          <el-button size="small" type="danger" plain :disabled="r.status !== 'booked'" @click="updateStatus(r, 'cancelled')">取消</el-button>
+          <el-button size="small" type="warning" :disabled="r.status !== 'seated'" @click="updateStatus(r, 'dining')">开始用餐</el-button>
+          <el-button size="small" :disabled="r.status !== 'dining'" @click="updateStatus(r, 'finished')">完桌</el-button>
+          <el-button size="small" :disabled="r.status !== 'booked'" @click="updateStatus(r, 'no_show')">标记未到</el-button>
+          <el-button size="small" type="danger" plain :disabled="r.status !== 'created' && r.status !== 'booked'" @click="updateStatus(r, 'cancelled')">取消</el-button>
         </div>
       </div>
       <el-empty v-if="!reservations.length" description="暂无预约" />
@@ -53,7 +59,7 @@ const stats = computed(() => ({
   total: reservations.value.length,
   seated: reservations.value.filter(r => r.status === 'seated').length,
   finished: reservations.value.filter(r => r.status === 'finished').length,
-  pending: reservations.value.filter(r => r.status === 'booked').length,
+  pending: reservations.value.filter(r => r.status === 'created' || r.status === 'booked').length,
 }))
 
 async function loadReservations() {
