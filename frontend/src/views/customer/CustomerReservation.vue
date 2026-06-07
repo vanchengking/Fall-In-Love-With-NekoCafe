@@ -138,11 +138,22 @@
                 <span class="menu-meta">{{ item.category }} · {{ item.tags?.join(' / ') }}</span>
               </div>
               <div class="menu-right">
-                <span class="menu-price">{{ cents(item.price_cents) }}</span>
+                <!-- 有折扣时显示原价（划线）和折扣价 -->
+                <div v-if="memberDiscount < 1.0" class="price-column">
+                  <span class="original-price">{{ cents(item.price_cents) }}</span>
+                  <span class="discount-badge" v-if="memberDiscount === 0.85">8.5折</span>
+                  <span class="discount-badge" v-else-if="memberDiscount === 0.9">9折</span>
+                  <span class="discount-badge" v-else-if="memberDiscount === 0.95">9.5折</span>
+                  <span class="discounted-price">{{ cents(getDiscountedPrice(item.price_cents)) }}</span>
+                </div>
+                <!-- 无折扣时只显示原价 -->
+                <div v-else class="price-column">
+                  <span class="menu-price">{{ cents(item.price_cents) }}</span>
+                </div>
                 <el-input-number
                   :model-value="cart.selectedMenu[item.id] || 0"
                   @update:model-value="cart.setQuantity(item.id, $event)"
-                  :min="0" :max="9" size="small" />
+                  :min="0" :max="9" size="small" controls-position="right" />
               </div>
             </div>
           </div>
@@ -154,12 +165,23 @@
             <span>{{ item.name }} × {{ item.quantity }}</span>
             <span>{{ cents(item.subtotal) }}</span>
           </div>
+          <!-- 原价合计 -->
+          <div class="cart-row original">
+            <span>原价合计</span>
+            <span class="original-price">{{ cents(cartOriginalTotal) }}</span>
+          </div>
+          <!-- 折扣优惠（仅会员有折扣时显示） -->
+          <div v-if="memberDiscount < 1.0" class="cart-row discount">
+            <span>会员折扣（{{ discountLabel }}）</span>
+            <span class="discount-amount">-&ensp;{{ cents(cartDiscountAmount) }}</span>
+          </div>
+          <!-- 实付金额 -->
           <div class="cart-total">
-            <span>合计</span>
-            <span>{{ cents(cart.orderTotal) }}</span>
+            <span>实付金额</span>
+            <span class="final-total">{{ cents(cartDiscountedTotal) }}</span>
           </div>
           <el-button type="primary" plain style="width: 100%; margin-top: 10px" @click="handleCreateOrder">
-            生成点单 {{ cents(cart.orderTotal) }}
+            生成点单 {{ cents(cartDiscountedTotal) }}
           </el-button>
         </div>
       </div>
@@ -186,6 +208,7 @@ const tables = ref<DiningTable[]>([])
 const cats = ref<CatType[]>([])
 const menuItems = ref<MenuItem[]>([])
 const recommendations = ref<RecType>({ cat: null, tables: [], menuItems: [] })
+const memberDiscount = ref<number>(1.0)  // 会员折扣率
 const preferenceOptions = ['quiet', 'window', 'sweet', 'coffee', 'photo', 'healthy']
 
 const form = reactive({
@@ -202,6 +225,17 @@ const form = reactive({
 const windowTables = computed(() => tables.value.filter(t => t.area === 'window'))
 const mainTables = computed(() => tables.value.filter(t => t.area !== 'window'))
 const selectedTableObj = computed(() => tables.value.find(t => t.id === form.tableId))
+
+// 购物车价格计算（含会员折扣）
+const cartOriginalTotal = computed(() => cart.orderTotal)  // 原价合计
+const cartDiscountedTotal = computed(() => Math.round(cart.orderTotal * memberDiscount.value))  // 折后合计
+const cartDiscountAmount = computed(() => cartOriginalTotal.value - cartDiscountedTotal.value)  // 优惠金额
+const discountLabel = computed(() => {
+  if (memberDiscount.value === 0.85) return '8.5折'
+  if (memberDiscount.value === 0.9) return '9折'
+  if (memberDiscount.value === 0.95) return '9.5折'
+  return ''
+})
 
 function tableClass(table: DiningTable) {
   return {
@@ -259,6 +293,11 @@ async function handleCreateOrder() {
   } catch (e) { ElMessage.error((e as Error).message) }
 }
 
+// 计算折扣价
+function getDiscountedPrice(priceCents: number): number {
+  return Math.round(priceCents * memberDiscount.value)
+}
+
 onMounted(async () => {
   try {
     const [t, c, m] = await Promise.all([
@@ -270,6 +309,17 @@ onMounted(async () => {
   } catch {
     tables.value = fallbackTables; cats.value = fallbackCats; menuItems.value = fallbackMenuItems
   }
+
+  // 获取会员折扣率
+  if (auth.isAuthenticated) {
+    try {
+      const memberInfo = await api.get<{discount: number}>('/users/me/member')
+      memberDiscount.value = memberInfo.discount || 1.0
+    } catch {
+      memberDiscount.value = 1.0
+    }
+  }
+
   await refreshRecommendations()
 })
 </script>
@@ -336,10 +386,19 @@ onMounted(async () => {
 .menu-photo { width: 48px; height: 48px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
 .menu-info strong { font-size: 14px; color: #172033; }
 .menu-meta { display: block; font-size: 12px; color: #667085; margin-top: 2px; }
-.menu-right { display: flex; align-items: center; gap: 10px; }
+.menu-right { display: flex; align-items: flex-start; gap: 8px; }
+.price-column { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .menu-price { font-weight: 700; color: #e86f51; font-size: 14px; }
+.original-price { font-size: 12px; color: #999; text-decoration: line-through; }
+.discount-badge { font-size: 11px; background: #e6f7ff; color: #1890ff; padding: 1px 6px; border-radius: 4px; font-weight: 600; display: inline-block; }
+.discounted-price { font-weight: 700; color: #e86f51; font-size: 14px; }
 
 .cart-summary { background: #fff; padding: 16px; border-radius: 14px; border: 2px solid #0f766e; }
 .cart-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; }
+.cart-row.original { color: #999; }
+.cart-row.original .original-price { text-decoration: line-through; font-size: 13px; }
+.cart-row.discount { color: #52c41a; }
+.discount-amount { color: #52c41a; font-weight: 600; }
 .cart-total { display: flex; justify-content: space-between; font-weight: 700; font-size: 16px; padding-top: 10px; margin-top: 8px; border-top: 2px solid #e8e5df; color: #172033; }
+.final-total { color: #e86f51; font-size: 18px; }
 </style>

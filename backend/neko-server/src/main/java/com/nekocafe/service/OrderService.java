@@ -30,17 +30,20 @@ public class OrderService {
     private final PaymentTransactionMapper paymentTransactionMapper;
     private final CatalogMapper catalogMapper;
     private final ReservationMapper reservationMapper;
+    private final UserService userService;
 
     public OrderService(OrderMapper orderMapper,
                         OrderItemMapper orderItemMapper,
                         PaymentTransactionMapper paymentTransactionMapper,
                         CatalogMapper catalogMapper,
-                        ReservationMapper reservationMapper) {
+                        ReservationMapper reservationMapper,
+                        UserService userService) {
         this.orderMapper = orderMapper;
         this.orderItemMapper = orderItemMapper;
         this.paymentTransactionMapper = paymentTransactionMapper;
         this.catalogMapper = catalogMapper;
         this.reservationMapper = reservationMapper;
+        this.userService = userService;
     }
 
     public List<Map<String, Object>> list(Long storeId) {
@@ -86,13 +89,19 @@ public class OrderService {
         Long userId = Normalizer.toLong(reservation.get("user_id"));
         Long storeId = Normalizer.toLong(reservation.get("store_id"));
 
+        // 应用会员折扣
+        double discountRate = userService.getDiscountByUserId(userId);
+        long discountedTotal = Math.round(total * discountRate);
+
         OrderEntity order = new OrderEntity();
         order.setReservationId(request.reservationId());
         order.setUserId(userId);
         order.setStoreId(storeId);
         order.setStatus("paid");
         order.setPaymentStatus("sandbox_paid");
-        order.setTotalCents((int) total);
+        order.setOriginalTotalCents((int) total);  // 保存原价
+        order.setDiscountRate(discountRate);         // 保存折扣率
+        order.setTotalCents((int) discountedTotal); // 保存折扣后价格
         orderMapper.insert(order);
 
         for (OrderRequest.Item item : request.items()) {
@@ -103,7 +112,19 @@ public class OrderService {
 
         String txnRef = "SBX-" + order.getId();
         paymentTransactionMapper.insert(new PaymentTransaction(
-                order.getId(), request.reservationId(), (int) total, "sandbox", "paid", txnRef));
+                order.getId(), request.reservationId(), (int) discountedTotal, "sandbox", "paid", txnRef));
+
+        // 支付成功后增加积分（按折后价，1元=1积分）
+        // 若积分增加失败，抛出异常触发事务回滚，订单不会创建
+        try {
+            int pointsToAdd = Math.toIntExact(discountedTotal / 100);
+            System.out.println("[OrderService] 订单#" + order.getId() + " 支付成功，用户ID=" + userId + "，准备增加积分: " + pointsToAdd);
+            userService.addPoints(userId, pointsToAdd);
+            System.out.println("[OrderService] 积分增加成功，用户ID=" + userId);
+        } catch (Exception e) {
+            System.err.println("[OrderService] 积分增加失败: " + e.getMessage());
+            throw ApiException.badRequest("积分增加失败：" + e.getMessage());
+        }
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("id", order.getId());
@@ -112,8 +133,53 @@ public class OrderService {
         out.put("store_id", order.getStoreId());
         out.put("status", order.getStatus());
         out.put("payment_status", order.getPaymentStatus());
-        out.put("total_cents", order.getTotalCents());
+        out.put("original_total_cents", order.getOriginalTotalCents());  // 原价
+        out.put("discount_rate", order.getDiscountRate());                // 折扣率
+        out.put("total_cents", order.getTotalCents());                  // 折后价
         out.put("payment", Map.of("txn_ref", txnRef, "channel", "sandbox", "status", "paid"));
         return out;
+    }
+
+    /**
+     * 取消订单并返还积分
+     */
+    @Transactional
+    public Map<String, Object> cancelOrder(Long orderId) {
+        OrderEntity order = orderMapper.selectById(orderId);
+        if (order == null) {
+            throw ApiException.notFound("订单不存在");
+        }
+        if (!"paid".equals(order.getStatus())) {
+            throw ApiException.badRequest("只能撤销已支付的订单");
+        }
+
+        // 先返还积分（如果失败，事务回滚，订单状态不会更新）
+        int pointsToDeduct = order.getTotalCents() / 100;
+        try {
+            userService.addPoints(order.getUserId(), -pointsToDeduct);
+        } catch (Exception e) {
+            // 积分返还失败，抛出异常触发事务回滚
+            throw ApiException.badRequest("积分返还失败：" + e.getMessage());
+        }
+
+        // 积分返还成功后，再更新订单状态
+        order.setStatus("cancelled");
+        orderMapper.updateById(order);
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", order.getId());
+        out.put("status", order.getStatus());
+        out.put("total_cents", order.getTotalCents());
+        return out;
+    }
+
+    public Map<String, Object> getOrderDetail(Long orderId) {
+        Map<String, Object> order = catalogMapper.getOrderDetail(orderId);
+        if (order == null) {
+            throw ApiException.notFound("订单不存在");
+        }
+        List<Map<String, Object>> items = catalogMapper.getOrderItems(orderId);
+        order.put("items", items);
+        return order;
     }
 }

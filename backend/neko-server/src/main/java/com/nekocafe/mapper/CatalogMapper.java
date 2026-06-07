@@ -141,4 +141,27 @@ public interface CatalogMapper {
 
     @org.apache.ibatis.annotations.Update("UPDATE menu_items SET photo_url = #{photoUrl} WHERE id = #{id}")
     void updateMenuItemPhoto(@Param("id") Long id, @Param("photoUrl") String photoUrl);
+
+    @Select("""
+            SELECT o.id, o.user_id, o.store_id, o.status, o.payment_status,
+                   o.total_cents, o.original_total_cents, o.discount_rate,
+                   DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i') AS created_at,
+                   u.name AS customer_name,
+                   r.reservation_date, r.reservation_time
+            FROM orders o
+            JOIN users u ON u.id = o.user_id
+            LEFT JOIN reservations r ON r.id = o.reservation_id
+            WHERE o.id = #{orderId}
+            """)
+    Map<String, Object> getOrderDetail(@Param("orderId") Long orderId);
+
+    @Select("""
+            SELECT oi.id, oi.menu_item_id, oi.quantity, oi.unit_price_cents,
+                   mi.name AS menu_item_name
+            FROM order_items oi
+            JOIN menu_items mi ON mi.id = oi.menu_item_id
+            WHERE oi.order_id = #{orderId}
+            ORDER BY oi.id
+            """)
+    List<Map<String, Object>> getOrderItems(@Param("orderId") Long orderId);
 }

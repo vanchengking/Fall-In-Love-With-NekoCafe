@@ -47,11 +47,54 @@
 
           <el-tab-pane label="我的订单" name="orders">
             <div v-for="o in orders" :key="o.id" class="order-item">
-              <div>
-                <strong>订单 #{{ o.id }}</strong>
-                <span class="order-meta">{{ o.status }} · {{ cents(o.total_cents) }}</span>
+              <div class="order-header" @click="toggleOrderDetail(o.id)">
+                <div>
+                  <strong>订单 #{{ o.id }}</strong>
+                  <span class="order-meta">{{ o.created_at }} · {{ cents(o.total_cents) }}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <el-tag :type="getOrderStatusType(o.status)" size="small">{{ getOrderStatusLabel(o.status) }}</el-tag>
+                  <el-icon :class="{ 'is-rotate': expandedOrderId === o.id }"><ArrowDown /></el-icon>
+                </div>
               </div>
-              <el-tag :type="o.status === 'paid' ? 'success' : 'info'" size="small">{{ o.payment_status }}</el-tag>
+              
+              <!-- 订单详情（展开显示） -->
+              <div v-if="expandedOrderId === o.id" class="order-detail">
+                <div v-if="orderDetails[o.id]">
+                  <!-- 原价和折扣价对比 -->
+                  <div v-if="orderDetails[o.id].original_total_cents && orderDetails[o.id].original_total_cents !== orderDetails[o.id].total_cents" class="price-comparison">
+                    <div class="price-row">
+                      <span>原价</span>
+                      <span class="original-price">{{ cents(orderDetails[o.id].original_total_cents) }}</span>
+                    </div>
+                    <div class="price-row discount">
+                      <span>折扣优惠（{{ (orderDetails[o.id].discount_rate * 10).toFixed(1) }}折）</span>
+                      <span class="discount-amount">- {{ cents(orderDetails[o.id].original_total_cents - orderDetails[o.id].total_cents) }}</span>
+                    </div>
+                  </div>
+                  
+                  <div v-for="item in orderDetails[o.id].items" :key="item.id" class="order-dish">
+                    <span>{{ item.menu_item_name }} × {{ item.quantity }}</span>
+                    <span>{{ cents(item.unit_price_cents * item.quantity) }}</span>
+                  </div>
+                  <div class="order-total">
+                    <span>实付金额</span>
+                    <span>{{ cents(o.total_cents) }}</span>
+                  </div>
+                </div>
+                <div v-else class="loading">加载中...</div>
+                
+                <!-- 撤销订单按钮 -->
+                <el-button 
+                  v-if="o.status === 'paid'" 
+                  type="danger" 
+                  plain 
+                  size="small" 
+                  style="margin-top: 12px; width: 100%"
+                  @click="cancelOrder(o)">
+                  撤销订单
+                </el-button>
+              </div>
             </div>
             <el-empty v-if="!orders.length" description="暂无订单" />
           </el-tab-pane>
@@ -65,6 +108,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowDown } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { api } from '@/utils/http'
 import { cents, statusLabel, statusType } from '@/utils/format'
@@ -77,6 +121,8 @@ const reservations = ref<Reservation[]>([])
 const orders = ref<Order[]>([])
 const profile = ref<any>({})
 const memberInfo = ref<any>(null)
+const expandedOrderId = ref<number | null>(null)
+const orderDetails = ref<Record<number, any>>({})
 
 function handleLogout() { auth.logout(); router.push('/login') }
 
@@ -130,6 +176,60 @@ onMounted(async () => {
   await loadProfile()
   await loadMemberInfo()
 })
+
+// 展开/收起订单详情
+async function toggleOrderDetail(orderId: number) {
+  if (expandedOrderId.value === orderId) {
+    expandedOrderId.value = null
+    return
+  }
+  expandedOrderId.value = orderId
+  
+  // 加载订单详情
+  if (!orderDetails.value[orderId]) {
+    try {
+      orderDetails.value[orderId] = await api.get(`/orders/${orderId}`)
+    } catch (e) {
+      ElMessage.error('加载订单详情失败')
+    }
+  }
+}
+
+// 撤销订单
+async function cancelOrder(order: any) {
+  try {
+    await ElMessageBox.confirm('确定要撤销这个订单吗？撤销后积分将返还', '撤销订单', { type: 'warning' })
+    await api.patch(`/orders/${order.id}/cancel`)
+    ElMessage.success('订单已撤销')
+    // 刷新订单列表
+    orders.value = await api.get<Order[]>('/orders')
+    expandedOrderId.value = null
+  } catch (e) {
+    if ((e as string) !== 'cancel') ElMessage.error((e as Error).message)
+  }
+}
+
+// 获取订单状态类型（用于Tag颜色）
+function getOrderStatusType(status: string) {
+  const map: Record<string, string> = {
+    'paid': 'success',
+    'cancelled': 'danger',
+    'preparing': 'warning',
+    'served': 'info'
+  }
+  return map[status] || 'info'
+}
+
+// 获取订单状态标签
+function getOrderStatusLabel(status: string) {
+  const map: Record<string, string> = {
+    'paid': '已支付',
+    'cancelled': '已撤销',
+    'preparing': '制作中',
+    'served': '已上菜'
+  }
+  return map[status] || status
+}
 </script>
 
 <style scoped>
@@ -166,4 +266,17 @@ onMounted(async () => {
 .res-left { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .order-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f0eeea; }
 .order-meta { display: block; font-size: 13px; color: #667085; margin-top: 2px; }
+
+/* 订单详情中的原价和折扣价对比 */
+.price-comparison { margin: 12px 0; padding: 12px; background: #f8f9fa; border-radius: 8px; }
+.price-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+.original-price { color: #999; }
+.original-price span:last-child { text-decoration: line-through; color: #999; }
+.discount { color: #e6a23c; }
+.discount-amount { color: #e6a23c; font-weight: 700; }
+
+.order-detail { padding: 12px; background: #f8f9fa; border-radius: 8px; margin-top: 8px; }
+.order-dish { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; color: #333; }
+.order-total { display: flex; justify-content: space-between; padding-top: 8px; margin-top: 8px; border-top: 1px solid #e8e5df; font-weight: 700; }
+.loading { text-align: center; color: #999; padding: 12px; font-size: 13px; }
 </style>

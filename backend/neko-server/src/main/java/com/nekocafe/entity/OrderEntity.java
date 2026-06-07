@@ -15,6 +15,8 @@ public class OrderEntity {
     private String status;
     private String paymentStatus;
     private Integer totalCents;
+    private Integer originalTotalCents;  // 原价（折扣前）
+    private Double discountRate;           // 折扣率
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -36,4 +38,10 @@ public class OrderEntity {
 
     public Integer getTotalCents() { return totalCents; }
     public void setTotalCents(Integer totalCents) { this.totalCents = totalCents; }
+
+    public Integer getOriginalTotalCents() { return originalTotalCents; }
+    public void setOriginalTotalCents(Integer originalTotalCents) { this.originalTotalCents = originalTotalCents; }
+
+    public Double getDiscountRate() { return discountRate; }
+    public void setDiscountRate(Double discountRate) { this.discountRate = discountRate; }
 }

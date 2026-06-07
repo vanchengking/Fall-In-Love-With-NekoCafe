@@ -72,10 +72,13 @@ public class UserService {
             throw ApiException.notFound("用户不存在");
         }
 
-        int newPoints = user.getPoints() + delta;
+        int oldPoints = user.getPoints();
+        int newPoints = oldPoints + delta;
         if (newPoints < 0) {
             throw ApiException.badRequest("积分不足");
         }
+
+        System.out.println("[UserService] addPoints: userId=" + userId + ", delta=" + delta + ", oldPoints=" + oldPoints + ", newPoints=" + newPoints);
 
         user.setPoints(newPoints);
         user.setMemberLevel(calculateMemberLevel(newPoints));
@@ -138,6 +141,17 @@ public class UserService {
             case "silver" -> 0.95;
             default -> 1.0;
         };
+    }
+
+    /**
+     * 根据用户ID获取折扣率（供订单服务调用）
+     */
+    public double getDiscountByUserId(Long userId) {
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw ApiException.notFound("用户不存在");
+        }
+        return getDiscount(user.getMemberLevel());
     }
 
     /**
