@@ -4,12 +4,12 @@
 
     <!-- 选项卡：全部评价 / 我的评价 -->
     <el-tabs v-model="activeTab" @tab-change="handleTabChange">
-      <el-tab-pane label="全部评价" name="all" />
-      <el-tab-pane label="我的评价" name="my" />
-    </el-tabs>
+    <el-tab-pane label="全部评价" name="all" />
+    <el-tab-pane label="我的评价" name="my" />
+  </el-tabs>
 
-    <!-- 写评价表单（仅在"我的评价"tab显示） -->
-    <div v-if="activeTab === 'my'" class="review-form panel">
+  <!-- 写评价表单（仅在"我的评价"tab显示） -->
+  <div v-if="activeTab === 'my'" class="review-form panel">
       <h3 style="margin-bottom: 12px">写评价</h3>
       <el-form label-position="top" @submit.prevent="submitReview">
         <el-form-item label="评分">
@@ -80,6 +80,10 @@ async function submitReview() {
     ElMessage.warning('请输入评价内容')
     return
   }
+  if (!form.rating) {
+    ElMessage.warning('请选择评分')
+    return
+  }
   submitting.value = true
   try {
     await api.post('/reviews', {
@@ -94,8 +98,8 @@ async function submitReview() {
     form.catId = null
     form.rating = 5
     await loadReviews()
-  } catch (e) {
-    ElMessage.error((e as Error).message)
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.message || e.message || '提交失败')
   } finally {
     submitting.value = false
   }
@@ -106,7 +110,8 @@ async function loadReviews() {
     if (activeTab.value === 'my') {
       reviews.value = await api.get<Review[]>('/reviews/my')
     } else {
-      reviews.value = await api.get<Review[]>('/reviews', { storeId: form.storeId })
+      // 修复：调用正确的端点 /reviews/store/{storeId}
+      reviews.value = await api.get<Review[]>(`/reviews/store/${form.storeId}`)
     }
   } catch { reviews.value = [] }
 }

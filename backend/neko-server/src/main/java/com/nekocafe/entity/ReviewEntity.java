@@ -1,6 +1,7 @@
 package com.nekocafe.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 
@@ -13,16 +14,25 @@ public class ReviewEntity {
 
     private Long userId;
     private Long storeId;
-    private Long reservationId;  // 关联预约
-    private Long catId;           // 可选，评价猫咪
-
+    
+    @TableField(exist = false)
+    private Long reservationId;  // 关联预约（数据库可能不存在此字段）
+    
+    @TableField(exist = false)
+    private Long catId;           // 可选，评价猫咪（数据库可能不存在此字段）
+    
     private Integer rating;       // 评分 1-5
     private String content;      // 评价内容
-    private String photoUrls;    // 照片URL，逗号分隔
-
+    
+    @TableField(exist = false)
+    private String photoUrls;    // 照片URL，逗号分隔（数据库可能不存在此字段）
+    
     private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    
+    @TableField(exist = false)
+    private LocalDateTime updatedAt;  // 数据库可能不存在此字段
 
+    // Getter 和 Setter 方法
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
