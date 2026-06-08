@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nekocafe.common.Normalizer;
 import com.nekocafe.mapper.CatalogMapper;
+import com.nekocafe.mapper.StoreMapper;
+import com.nekocafe.mapper.TableMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -21,15 +23,21 @@ public class CatalogService {
     private static final String STORES_CACHE_KEY = "neko:cache:stores";
 
     private final CatalogMapper catalogMapper;
+    private final StoreMapper storeMapper;
+    private final TableMapper tableMapper;
     private final StringRedisTemplate redis;
     private final ObjectMapper objectMapper;
     private final long storesTtlSeconds;
 
     public CatalogService(CatalogMapper catalogMapper,
+                          StoreMapper storeMapper,
+                          TableMapper tableMapper,
                           StringRedisTemplate redis,
                           ObjectMapper objectMapper,
                           @Value("${neko.cache.stores-ttl-seconds:60}") long storesTtlSeconds) {
         this.catalogMapper = catalogMapper;
+        this.storeMapper = storeMapper;
+        this.tableMapper = tableMapper;
         this.redis = redis;
         this.objectMapper = objectMapper;
         this.storesTtlSeconds = storesTtlSeconds;
@@ -45,7 +53,7 @@ public class CatalogService {
         } catch (Exception ignored) {
             // 缓存读取失败时回源
         }
-        List<Map<String, Object>> stores = catalogMapper.listStores();
+        List<Map<String, Object>> stores = storeMapper.listStores();
         try {
             redis.opsForValue().set(STORES_CACHE_KEY,
                     objectMapper.writeValueAsString(stores), storesTtlSeconds, TimeUnit.SECONDS);
@@ -56,7 +64,7 @@ public class CatalogService {
     }
 
     public List<Map<String, Object>> listTables(Long storeId, String date, String time, Integer partySize) {
-        List<Map<String, Object>> rows = catalogMapper.listTables(storeId,
+        List<Map<String, Object>> rows = tableMapper.listTables(storeId,
                 emptyToNull(date), emptyToNull(time), partySize);
         Normalizer.boolField(rows, "cat_zone");
         Normalizer.boolField(rows, "available_for_slot");
