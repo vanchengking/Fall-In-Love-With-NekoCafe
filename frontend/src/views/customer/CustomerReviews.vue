@@ -119,7 +119,7 @@ async function loadReviews() {
 async function deleteReview(id: number) {
   try {
     await ElMessageBox.confirm('确定删除这条评价？', '提示', { type: 'warning' })
-    await api.delete(`/reviews/${id}`)
+    await api.remove(`/reviews/${id}`)
     ElMessage.success('删除成功')
     await loadReviews()
   } catch (e: any) {

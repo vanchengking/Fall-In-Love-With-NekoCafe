@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.HttpStatus;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -110,14 +111,19 @@ public class ReviewController {
 
     @Operation(summary = "删除我的评价")
     @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@AuthenticationPrincipal AuthUser user,
-                      @PathVariable Long id) {
+                       @PathVariable Long id) {
         try {
             log.info("Deleting review id={} for userId={}", id, user == null ? null : user.id());
             if (user == null) {
                 throw new RuntimeException("用户未登录");
             }
-            reviewMapper.deleteByIdAndUserId(id, user.id());
+            int rows = reviewMapper.deleteByIdAndUserId(id, user.id());
+            if (rows == 0) {
+                throw new RuntimeException("评价不存在或无权删除");
+            }
+            log.info("Review deleted, rows={}", rows);
         } catch (Exception e) {
             log.error("Error deleting review", e);
             throw new RuntimeException("删除评价失败: " + e.getMessage(), e);
