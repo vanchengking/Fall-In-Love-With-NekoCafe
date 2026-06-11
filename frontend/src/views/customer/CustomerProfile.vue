@@ -98,6 +98,52 @@
             </div>
             <el-empty v-if="!orders.length" description="暂无订单" />
           </el-tab-pane>
+
+          <el-tab-pane label="用餐偏好" name="prefs">
+            <div class="prefs-section">
+              <p class="prefs-tip">设置您的用餐偏好，帮助我们为您提供更好的体验</p>
+
+              <!-- 当前偏好标签 -->
+              <div class="current-prefs">
+                <span v-if="!preferences.length" class="no-prefs">暂无偏好设置，添加后我们将为您提供更个性化的服务</span>
+                <el-tag
+                  v-for="(p, idx) in preferences"
+                  :key="idx"
+                  closable
+                  @close="removePreference(idx)"
+                  type="primary"
+                  style="margin: 0 8px 8px 0"
+                >{{ p }}</el-tag>
+              </div>
+
+              <!-- 预设偏好快捷添加 -->
+              <div class="preset-prefs">
+                <div class="preset-label">快捷添加：</div>
+                <el-button
+                  v-for="pp in presetPrefs"
+                  :key="pp"
+                  size="small"
+                  :type="preferences.includes(pp) ? 'primary' : 'default'"
+                  @click="togglePreference(pp)"
+                  style="margin: 0 6px 6px 0"
+                >{{ pp }}</el-button>
+              </div>
+
+              <!-- 自定义输入 -->
+              <div class="custom-pref">
+                <el-input
+                  v-model="newPreference"
+                  placeholder="输入自定义偏好，如：过生日"
+                  size="small"
+                  style="width: 240px; margin-right: 8px"
+                  @keyup.enter="addCustomPreference"
+                />
+                <el-button size="small" @click="addCustomPreference" :disabled="!newPreference.trim()">添加</el-button>
+              </div>
+
+              <el-button type="primary" size="small" style="margin-top: 16px" @click="savePreferences" :loading="savingPrefs">保存偏好</el-button>
+            </div>
+          </el-tab-pane>
         </el-tabs>
       </div>
     </div>
@@ -123,6 +169,69 @@ const profile = ref<any>({})
 const memberInfo = ref<any>(null)
 const expandedOrderId = ref<number | null>(null)
 const orderDetails = ref<Record<number, any>>({})
+
+// 偏好管理
+const preferences = ref<string[]>([])
+const newPreference = ref('')
+const savingPrefs = ref(false)
+const presetPrefs = [
+  '喜欢靠窗座位',
+  '喜欢安静角落',
+  '对猫毛过敏',
+  '不吃辣',
+  '喜欢互动多的猫咪',
+  '带小孩',
+  '过生日',
+  '需要儿童座椅',
+  '需要充电插座',
+  '素食优先',
+]
+
+function loadPreferences() {
+  if (profile.value?.preferences) {
+    preferences.value = [...profile.value.preferences]
+  } else if (auth.user?.preferences) {
+    preferences.value = [...auth.user.preferences]
+  }
+}
+
+function togglePreference(pref: string) {
+  const idx = preferences.value.indexOf(pref)
+  if (idx >= 0) {
+    preferences.value.splice(idx, 1)
+  } else {
+    preferences.value.push(pref)
+  }
+}
+
+function addCustomPreference() {
+  const val = newPreference.value.trim()
+  if (!val) return
+  if (preferences.value.includes(val)) {
+    ElMessage.warning('该偏好已存在')
+    return
+  }
+  preferences.value.push(val)
+  newPreference.value = ''
+}
+
+function removePreference(idx: number) {
+  preferences.value.splice(idx, 1)
+}
+
+async function savePreferences() {
+  savingPrefs.value = true
+  try {
+    const res = await api.put('/users/me', { preferences: preferences.value })
+    profile.value = res
+    if (auth.user) auth.user.preferences = preferences.value
+    ElMessage.success('偏好保存成功')
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.message || '保存失败')
+  } finally {
+    savingPrefs.value = false
+  }
+}
 
 function handleLogout() { auth.logout(); router.push('/login') }
 
@@ -175,6 +284,7 @@ onMounted(async () => {
   // 加载用户资料和会员信息
   await loadProfile()
   await loadMemberInfo()
+  loadPreferences()
 })
 
 // 展开/收起订单详情
@@ -278,5 +388,12 @@ function getOrderStatusLabel(status: string) {
 .order-detail { padding: 12px; background: #f8f9fa; border-radius: 8px; margin-top: 8px; }
 .order-dish { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; color: #333; }
 .order-total { display: flex; justify-content: space-between; padding-top: 8px; margin-top: 8px; border-top: 1px solid #e8e5df; font-weight: 700; }
+.prefs-section { padding: 8px 0; }
+.prefs-tip { font-size: 13px; color: #667085; margin-bottom: 16px; }
+.current-prefs { margin-bottom: 16px; min-height: 32px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.no-prefs { color: #999; font-size: 13px; padding: 8px 0; }
+.preset-prefs { margin-bottom: 16px; }
+.preset-label { font-size: 13px; color: #667085; margin-bottom: 8px; }
+.custom-pref { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
 .loading { text-align: center; color: #999; padding: 12px; font-size: 13px; }
 </style>

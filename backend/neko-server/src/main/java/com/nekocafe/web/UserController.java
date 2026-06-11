@@ -1,6 +1,7 @@
 package com.nekocafe.web;
 
 import com.nekocafe.common.ApiResponse;
+import com.nekocafe.common.Payloads;
 import com.nekocafe.security.AuthUser;
 import com.nekocafe.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,9 +40,11 @@ public class UserController {
     @PutMapping("/me")
     public ApiResponse updateProfile(@RequestBody Map<String, Object> body,
                                      @AuthenticationPrincipal AuthUser user) {
-        String name = body.containsKey("name") ? body.get("name").toString() : null;
-        List<String> prefs = body.containsKey("preferences") ?
-                (List<String>) body.get("preferences") : null;
+        // 前端 http.ts 会用 wrapData() 包装一层 {data: ...}，需要解包
+        Map<String, Object> payload = (Map<String, Object>) Payloads.unwrap(body);
+        String name = payload.containsKey("name") ? payload.get("name").toString() : null;
+        List<String> prefs = payload.containsKey("preferences") ?
+                (List<String>) payload.get("preferences") : null;
         return ApiResponse.of(userService.updateProfile(user.id(), name, prefs));
     }
 
