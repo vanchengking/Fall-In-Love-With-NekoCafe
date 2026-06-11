@@ -12,7 +12,8 @@ const roleDefaultRoute: Record<string, string> = {
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/login', name: 'login', component: () => import('@/views/Login.vue') },
+    { path: '/login', name: 'login', component: () => import('@/views/Login.vue'), meta: { public: true } },
+    { path: '/register', name: 'register', component: () => import('@/views/Register.vue'), meta: { public: true } },
 
     // 顾客路由
     {
