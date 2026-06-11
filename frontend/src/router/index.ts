@@ -22,6 +22,7 @@ const router = createRouter({
         { path: '', name: 'customer-home', component: () => import('@/views/customer/CustomerHome.vue') },
         { path: 'stores', name: 'customer-stores', component: () => import('@/views/customer/CustomerStores.vue') },
         { path: 'stores/:id', name: 'customer-store-detail', component: () => import('@/views/customer/CustomerStoreDetail.vue') },
+        { path: 'stores/:id/reviews', name: 'customer-store-reviews', component: () => import('@/views/customer/StoreReviews.vue'), meta: { public: true } },
         { path: 'reservation', name: 'customer-reservation', component: () => import('@/views/customer/CustomerReservation.vue') },
         { path: 'order', name: 'customer-order', component: () => import('@/views/customer/CustomerOrder.vue') },
         { path: 'payment', name: 'customer-payment', component: () => import('@/views/customer/CustomerPayment.vue') },
@@ -75,6 +76,7 @@ function getAuth(): { token: string; role: string } | null {
 
 router.beforeEach((to) => {
   if (to.path === '/login') return
+  if (to.meta?.public) return
 
   const auth = getAuth()
   if (!auth) {

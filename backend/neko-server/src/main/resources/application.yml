@@ -65,4 +65,6 @@ neko:
 logging:
   level:
     root: INFO
-    com.nekocafe: INFO
+    com.nekocafe: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} %-5level %logger{36} - %msg%n"

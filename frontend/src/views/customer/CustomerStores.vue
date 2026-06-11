@@ -7,7 +7,10 @@
         <p>{{ store.city }} · {{ store.address }}</p>
         <p class="store-meta">电话：{{ store.phone }}</p>
         <p v-if="store.table_count" class="store-meta">{{ store.table_count }} 桌 · {{ store.total_seats }} 座</p>
-        <el-button type="primary" plain size="small" style="margin-top: 12px">查看详情</el-button>
+        <div style="display: flex; gap: 8px; margin-top: 12px" @click.stop>
+          <el-button type="primary" plain size="small" @click="$router.push(`/stores/${store.id}`)">查看详情</el-button>
+          <el-button size="small" @click="$router.push(`/stores/${store.id}/reviews`)">查看评价</el-button>
+        </div>
       </div>
     </div>
   </div>

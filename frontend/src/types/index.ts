@@ -164,11 +164,19 @@ export interface SelectedOrderItem extends OrderItemRequest {
 
 export interface Review {
   id: number
-  reservation_id: number | null
   user_id: number
   store_id: number
-  cat_id: number | null
+  order_id?: number | null
+  reservation_id?: number | null
+  cat_id?: number | null
   rating: number
+  food_rating?: number | null
+  service_rating?: number | null
+  environment_rating?: number | null
+  cat_rating?: number | null
   content: string | null
+  is_anonymous?: boolean
+  reply?: string | null
+  replied_at?: string | null
   created_at?: string
 }

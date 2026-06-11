@@ -11,9 +11,8 @@ import java.util.Map;
 public interface ReviewMapper extends BaseMapper<ReviewEntity> {
 
     @Select("""
-        SELECT r.*, u.name AS user_name, u.avatar_url AS avatar_url
+        SELECT r.*
         FROM reviews r
-        LEFT JOIN users u ON r.user_id = u.id
         WHERE r.store_id = #{storeId}
         ORDER BY r.created_at DESC
         LIMIT #{limit}

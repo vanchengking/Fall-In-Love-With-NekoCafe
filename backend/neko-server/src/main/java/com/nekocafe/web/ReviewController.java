@@ -54,11 +54,14 @@ public class ReviewController {
             ReviewEntity review = new ReviewEntity();
             review.setUserId(user.id());
             review.setStoreId(req.storeId());
-            review.setReservationId(req.reservationId());
-            review.setCatId(req.catId());
+            review.setOrderId(req.orderId());
             review.setRating(req.rating());
             review.setContent(req.content());
-            review.setPhotoUrls(req.photoUrls());
+            review.setFoodRating(req.foodRating());
+            review.setServiceRating(req.serviceRating());
+            review.setEnvironmentRating(req.environmentRating());
+            review.setCatRating(req.catRating());
+            review.setIsAnonymous(req.isAnonymous());
             review.setCreatedAt(LocalDateTime.now());
             review.setUpdatedAt(LocalDateTime.now());
 
@@ -72,19 +75,93 @@ public class ReviewController {
         }
     }
 
+    @Operation(summary = "修改我的评价")
+    @PutMapping("/{id}")
+    public ReviewEntity update(@AuthenticationPrincipal AuthUser user,
+                               @PathVariable Long id,
+                               @RequestBody Map<String, Object> body) {
+        try {
+            if (user == null) {
+                throw new RuntimeException("用户未登录");
+            }
+            ReviewEntity existing = reviewMapper.selectById(id);
+            if (existing == null) {
+                throw new RuntimeException("评价不存在");
+            }
+            if (!existing.getUserId().equals(user.id())) {
+                throw new RuntimeException("无权修改此评价");
+            }
+            // 已回复的评价不允许修改
+            if (existing.getReply() != null && !existing.getReply().isEmpty()) {
+                throw new RuntimeException("商家已回复，无法修改");
+            }
+
+            ReviewRequest req = objectMapper.convertValue(Payloads.unwrap(body), ReviewRequest.class);
+
+            if (req.rating() != null) {
+                if (req.rating() < 1 || req.rating() > 5) {
+                    throw new RuntimeException("rating must be between 1 and 5");
+                }
+                existing.setRating(req.rating());
+            }
+            if (req.content() != null) existing.setContent(req.content());
+            if (req.foodRating() != null) existing.setFoodRating(req.foodRating());
+            if (req.serviceRating() != null) existing.setServiceRating(req.serviceRating());
+            if (req.environmentRating() != null) existing.setEnvironmentRating(req.environmentRating());
+            if (req.catRating() != null) existing.setCatRating(req.catRating());
+            if (req.isAnonymous() != null) existing.setIsAnonymous(req.isAnonymous());
+            existing.setUpdatedAt(LocalDateTime.now());
+
+            reviewMapper.updateById(existing);
+            log.info("Review updated: id={}", id);
+            return existing;
+        } catch (Exception e) {
+            log.error("Error updating review", e);
+            throw new RuntimeException("修改评价失败: " + e.getMessage(), e);
+        }
+    }
+
+    @Operation(summary = "商家回复评价（店员/管理员）")
+    @PostMapping("/{id}/reply")
+    public ReviewEntity reply(@AuthenticationPrincipal AuthUser user,
+                              @PathVariable Long id,
+                              @RequestBody Map<String, String> body) {
+        try {
+            if (user == null) {
+                throw new RuntimeException("用户未登录");
+            }
+            String replyText = body.get("reply");
+            if (replyText == null || replyText.isBlank()) {
+                throw new RuntimeException("reply content is required");
+            }
+
+            ReviewEntity existing = reviewMapper.selectById(id);
+            if (existing == null) {
+                throw new RuntimeException("评价不存在");
+            }
+
+            existing.setReply(replyText);
+            existing.setRepliedAt(LocalDateTime.now());
+            existing.setUpdatedAt(LocalDateTime.now());
+
+            reviewMapper.updateById(existing);
+            log.info("Review replied: id={}, reply={}", id, replyText);
+            return existing;
+        } catch (Exception e) {
+            log.error("Error replying to review", e);
+            throw new RuntimeException("回复失败: " + e.getMessage(), e);
+        }
+    }
+
     @Operation(summary = "查看门店评价")
     @GetMapping("/store/{storeId}")
     public List<Map<String, Object>> getByStore(@PathVariable Long storeId,
                                                 @RequestParam(defaultValue = "20") Integer limit) {
         try {
             log.info("Getting reviews for storeId={}, limit={}", storeId, limit);
-            QueryWrapper<ReviewEntity> qw = new QueryWrapper<>();
-            qw.eq("store_id", storeId);
-            qw.orderByDesc("created_at");
-            qw.last("LIMIT " + limit);
-            List<ReviewEntity> list = reviewMapper.selectList(qw);
+            List<Map<String, Object>> list = reviewMapper.selectByStoreId(storeId, limit);
             log.info("Found {} reviews", list.size());
-            return list.stream().map(this::toMap).toList();
+            return list;
         } catch (Exception e) {
             log.error("Error getting reviews by store", e);
             throw new RuntimeException("查询评价失败: " + e.getMessage(), e);
@@ -135,20 +212,29 @@ public class ReviewController {
         m.put("id", r.getId());
         m.put("user_id", r.getUserId());
         m.put("store_id", r.getStoreId());
-        m.put("reservation_id", r.getReservationId());
-        m.put("cat_id", r.getCatId());
+        m.put("order_id", r.getOrderId());
         m.put("rating", r.getRating());
+        m.put("food_rating", r.getFoodRating());
+        m.put("service_rating", r.getServiceRating());
+        m.put("environment_rating", r.getEnvironmentRating());
+        m.put("cat_rating", r.getCatRating());
         m.put("content", r.getContent());
+        m.put("is_anonymous", r.getIsAnonymous());
+        m.put("reply", r.getReply());
+        m.put("replied_at", r.getRepliedAt());
         m.put("created_at", r.getCreatedAt());
         return m;
     }
 
     public record ReviewRequest(
         Long storeId,
-        Long reservationId,
-        Long catId,
+        Long orderId,
         Integer rating,
         String content,
-        String photoUrls
+        Integer foodRating,
+        Integer serviceRating,
+        Integer environmentRating,
+        Integer catRating,
+        Boolean isAnonymous
     ) {}
 }

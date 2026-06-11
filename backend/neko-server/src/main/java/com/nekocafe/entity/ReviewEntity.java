@@ -9,30 +9,32 @@ import java.time.LocalDateTime;
 
 @TableName("reviews")
 public class ReviewEntity {
+
     @TableId(type = IdType.AUTO)
     private Long id;
 
     private Long userId;
     private Long storeId;
-    
-    @TableField(exist = false)
-    private Long reservationId;  // 关联预约（数据库可能不存在此字段）
-    
-    @TableField(exist = false)
-    private Long catId;           // 可选，评价猫咪（数据库可能不存在此字段）
-    
-    private Integer rating;       // 评分 1-5
-    private String content;      // 评价内容
-    
-    @TableField(exist = false)
-    private String photoUrls;    // 照片URL，逗号分隔（数据库可能不存在此字段）
-    
-    private LocalDateTime createdAt;
-    
-    @TableField(exist = false)
-    private LocalDateTime updatedAt;  // 数据库可能不存在此字段
+    private Long orderId;       // 关联订单
 
-    // Getter 和 Setter 方法
+    // 各维度评分 1-5
+    private Integer rating;          // 综合评分（必填）
+    private Integer foodRating;      // 菜品评分
+    private Integer serviceRating;   // 服务评分
+    private Integer environmentRating; // 环境评分
+    private Integer catRating;       // 猫咪互动评分
+
+    private String content;          // 评价内容
+    private Boolean isAnonymous;     // 是否匿名
+
+    private String reply;           // 商家回复
+    private LocalDateTime repliedAt; // 回复时间
+
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+
+    // ===== Getter & Setter =====
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -42,20 +44,35 @@ public class ReviewEntity {
     public Long getStoreId() { return storeId; }
     public void setStoreId(Long storeId) { this.storeId = storeId; }
 
-    public Long getReservationId() { return reservationId; }
-    public void setReservationId(Long reservationId) { this.reservationId = reservationId; }
-
-    public Long getCatId() { return catId; }
-    public void setCatId(Long catId) { this.catId = catId; }
+    public Long getOrderId() { return orderId; }
+    public void setOrderId(Long orderId) { this.orderId = orderId; }
 
     public Integer getRating() { return rating; }
     public void setRating(Integer rating) { this.rating = rating; }
 
+    public Integer getFoodRating() { return foodRating; }
+    public void setFoodRating(Integer foodRating) { this.foodRating = foodRating; }
+
+    public Integer getServiceRating() { return serviceRating; }
+    public void setServiceRating(Integer serviceRating) { this.serviceRating = serviceRating; }
+
+    public Integer getEnvironmentRating() { return environmentRating; }
+    public void setEnvironmentRating(Integer environmentRating) { this.environmentRating = environmentRating; }
+
+    public Integer getCatRating() { return catRating; }
+    public void setCatRating(Integer catRating) { this.catRating = catRating; }
+
     public String getContent() { return content; }
     public void setContent(String content) { this.content = content; }
 
-    public String getPhotoUrls() { return photoUrls; }
-    public void setPhotoUrls(String photoUrls) { this.photoUrls = photoUrls; }
+    public Boolean getIsAnonymous() { return isAnonymous; }
+    public void setIsAnonymous(Boolean anonymous) { isAnonymous = anonymous; }
+
+    public String getReply() { return reply; }
+    public void setReply(String reply) { this.reply = reply; }
+
+    public LocalDateTime getRepliedAt() { return repliedAt; }
+    public void setRepliedAt(LocalDateTime repliedAt) { this.repliedAt = repliedAt; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
