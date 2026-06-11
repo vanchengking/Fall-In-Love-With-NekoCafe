@@ -51,6 +51,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/upload").authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/api/cats/*/photo", "/api/menu-items/*/photo").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/reviews").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/reviews/**").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/users/me").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/users/me/points").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/reservations", "/api/orders").authenticated()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex

@@ -23,6 +23,11 @@ export const useCartStore = defineStore('cart', () => {
     selectedOrderItems.value.reduce((sum, item) => sum + item.subtotal, 0),
   )
 
+  // 原价合计（未打折，与 orderTotal 相同，供前端价格对比使用）
+  const orderOriginalTotal = computed(() =>
+    selectedOrderItems.value.reduce((sum, item) => sum + item.subtotal, 0),
+  )
+
   const orderCount = computed(() =>
     selectedOrderItems.value.reduce((sum, item) => sum + item.quantity, 0),
   )

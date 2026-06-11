@@ -3,11 +3,32 @@
     <h2 style="margin-bottom: 20px">个人中心</h2>
     <div class="profile-grid">
       <div class="profile-card">
-        <h3>{{ auth.user?.name || '未登录' }}</h3>
-        <div class="field"><span class="label">手机号</span><span>{{ auth.user?.mobileNumber || auth.user?.mobile_number || '-' }}</span></div>
-        <div class="field"><span class="label">角色</span><span>{{ auth.user?.role || '-' }}</span></div>
-        <div class="field"><span class="label">会员等级</span><span>{{ auth.user?.memberLevel || auth.user?.member_level || '-' }}</span></div>
-        <div class="field"><span class="label">积分</span><span>{{ auth.user?.points ?? '-' }}</span></div>
+        <h3>{{ profile.name || auth.user?.name || '未登录' }}</h3>
+        <div class="field"><span class="label">手机号</span><span>{{ profile.mobile_number || auth.user?.mobileNumber || auth.user?.mobile_number || '-' }}</span></div>
+        <div class="field"><span class="label">角色</span><span>{{ profile.role || auth.user?.role || '-' }}</span></div>
+        <div class="field"><span class="label">会员等级</span><span class="member-level">{{ getLevelLabel(profile.member_level) }}</span></div>
+        <div class="field"><span class="label">积分</span><span class="points">{{ profile.points ?? '-' }}</span></div>
+        
+        <!-- 会员权益信息 -->
+        <div v-if="memberInfo" class="member-benefits">
+          <div class="benefit-item">
+            <span class="label">会员折扣</span>
+            <span class="discount">{{ (memberInfo.discount * 10).toFixed(1) }}折</span>
+          </div>
+          <div v-if="memberInfo.next_level" class="benefit-item">
+            <span class="label">下一等级</span>
+            <span>{{ getLevelLabel(memberInfo.next_level) }}</span>
+          </div>
+          <div v-if="memberInfo.points_to_next_level > 0" class="benefit-item">
+            <span class="label">距离升级</span>
+            <span>还需 {{ memberInfo.points_to_next_level }} 积分</span>
+          </div>
+          <div v-else class="benefit-item">
+            <span class="label">会员状态</span>
+            <span class="max-level">已达到最高等级</span>
+          </div>
+        </div>
+        
         <el-button type="danger" plain style="width: 100%; margin-top: 16px" @click="handleLogout">退出登录</el-button>
       </div>
 
@@ -26,11 +47,54 @@
 
           <el-tab-pane label="我的订单" name="orders">
             <div v-for="o in orders" :key="o.id" class="order-item">
-              <div>
-                <strong>订单 #{{ o.id }}</strong>
-                <span class="order-meta">{{ o.status }} · {{ cents(o.total_cents) }}</span>
+              <div class="order-header" @click="toggleOrderDetail(o.id)">
+                <div>
+                  <strong>订单 #{{ o.id }}</strong>
+                  <span class="order-meta">{{ o.created_at }} · {{ cents(o.total_cents) }}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <el-tag :type="getOrderStatusType(o.status)" size="small">{{ getOrderStatusLabel(o.status) }}</el-tag>
+                  <el-icon :class="{ 'is-rotate': expandedOrderId === o.id }"><ArrowDown /></el-icon>
+                </div>
               </div>
-              <el-tag :type="o.status === 'paid' ? 'success' : 'info'" size="small">{{ o.payment_status }}</el-tag>
+              
+              <!-- 订单详情（展开显示） -->
+              <div v-if="expandedOrderId === o.id" class="order-detail">
+                <div v-if="orderDetails[o.id]">
+                  <!-- 原价和折扣价对比 -->
+                  <div v-if="orderDetails[o.id].original_total_cents && orderDetails[o.id].original_total_cents !== orderDetails[o.id].total_cents" class="price-comparison">
+                    <div class="price-row">
+                      <span>原价</span>
+                      <span class="original-price">{{ cents(orderDetails[o.id].original_total_cents) }}</span>
+                    </div>
+                    <div class="price-row discount">
+                      <span>折扣优惠（{{ (orderDetails[o.id].discount_rate * 10).toFixed(1) }}折）</span>
+                      <span class="discount-amount">- {{ cents(orderDetails[o.id].original_total_cents - orderDetails[o.id].total_cents) }}</span>
+                    </div>
+                  </div>
+                  
+                  <div v-for="item in orderDetails[o.id].items" :key="item.id" class="order-dish">
+                    <span>{{ item.menu_item_name }} × {{ item.quantity }}</span>
+                    <span>{{ cents(item.unit_price_cents * item.quantity) }}</span>
+                  </div>
+                  <div class="order-total">
+                    <span>实付金额</span>
+                    <span>{{ cents(o.total_cents) }}</span>
+                  </div>
+                </div>
+                <div v-else class="loading">加载中...</div>
+                
+                <!-- 撤销订单按钮 -->
+                <el-button 
+                  v-if="o.status === 'paid'" 
+                  type="danger" 
+                  plain 
+                  size="small" 
+                  style="margin-top: 12px; width: 100%"
+                  @click="cancelOrder(o)">
+                  撤销订单
+                </el-button>
+              </div>
             </div>
             <el-empty v-if="!orders.length" description="暂无订单" />
           </el-tab-pane>
@@ -44,6 +108,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowDown } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { api } from '@/utils/http'
 import { cents, statusLabel, statusType } from '@/utils/format'
@@ -54,18 +119,47 @@ const router = useRouter()
 const activeTab = ref('reservations')
 const reservations = ref<Reservation[]>([])
 const orders = ref<Order[]>([])
+const profile = ref<any>({})
+const memberInfo = ref<any>(null)
+const expandedOrderId = ref<number | null>(null)
+const orderDetails = ref<Record<number, any>>({})
 
 function handleLogout() { auth.logout(); router.push('/login') }
+
+function getLevelLabel(level: string) {
+  const map: Record<string, string> = {
+    'bronze': '青铜',
+    'silver': '白银',
+    'gold': '黄金',
+    'platinum': '铂金'
+  }
+  return map[level] || level || '-'
+}
 
 async function cancelReservation(r: Reservation) {
   try {
     await ElMessageBox.confirm('确定要取消这个预约吗？', '取消预约', { type: 'warning' })
-    // 顾客取消走专用接口：需登录，服务层校验本人且仅 created/booked 可取消
     const updated = await api.patch<Reservation>(`/reservations/${r.id}/cancel`)
     reservations.value = reservations.value.map(x => x.id === updated.id ? updated : x)
     ElMessage.success('预约已取消')
   } catch (e) {
     if ((e as string) !== 'cancel') ElMessage.error((e as Error).message)
+  }
+}
+
+async function loadProfile() {
+  try {
+    profile.value = await api.get<any>('/users/me')
+  } catch (e) {
+    console.error('加载用户资料失败', e)
+  }
+}
+
+async function loadMemberInfo() {
+  try {
+    memberInfo.value = await api.get<any>('/users/me/member')
+  } catch (e) {
+    console.error('加载会员信息失败', e)
   }
 }
 
@@ -77,7 +171,65 @@ onMounted(async () => {
   }
   try { orders.value = await api.get<Order[]>('/orders') }
   catch { /* empty */ }
+  
+  // 加载用户资料和会员信息
+  await loadProfile()
+  await loadMemberInfo()
 })
+
+// 展开/收起订单详情
+async function toggleOrderDetail(orderId: number) {
+  if (expandedOrderId.value === orderId) {
+    expandedOrderId.value = null
+    return
+  }
+  expandedOrderId.value = orderId
+  
+  // 加载订单详情
+  if (!orderDetails.value[orderId]) {
+    try {
+      orderDetails.value[orderId] = await api.get(`/orders/${orderId}`)
+    } catch (e) {
+      ElMessage.error('加载订单详情失败')
+    }
+  }
+}
+
+// 撤销订单
+async function cancelOrder(order: any) {
+  try {
+    await ElMessageBox.confirm('确定要撤销这个订单吗？撤销后积分将返还', '撤销订单', { type: 'warning' })
+    await api.patch(`/orders/${order.id}/cancel`)
+    ElMessage.success('订单已撤销')
+    // 刷新订单列表
+    orders.value = await api.get<Order[]>('/orders')
+    expandedOrderId.value = null
+  } catch (e) {
+    if ((e as string) !== 'cancel') ElMessage.error((e as Error).message)
+  }
+}
+
+// 获取订单状态类型（用于Tag颜色）
+function getOrderStatusType(status: string) {
+  const map: Record<string, string> = {
+    'paid': 'success',
+    'cancelled': 'danger',
+    'preparing': 'warning',
+    'served': 'info'
+  }
+  return map[status] || 'info'
+}
+
+// 获取订单状态标签
+function getOrderStatusLabel(status: string) {
+  const map: Record<string, string> = {
+    'paid': '已支付',
+    'cancelled': '已撤销',
+    'preparing': '制作中',
+    'served': '已上菜'
+  }
+  return map[status] || status
+}
 </script>
 
 <style scoped>
@@ -87,9 +239,44 @@ onMounted(async () => {
 .profile-card h3 { font-size: 20px; margin-bottom: 16px; }
 .field { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0eeea; font-size: 14px; }
 .label { color: #667085; }
+
+.member-benefits { 
+  margin-top: 16px; 
+  padding: 16px; 
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+  border-radius: 8px; 
+  color: white; 
+}
+.benefit-item { 
+  display: flex; 
+  justify-content: space-between; 
+  padding: 8px 0; 
+  font-size: 14px; 
+  border-bottom: 1px solid rgba(255,255,255,0.2); 
+}
+.benefit-item:last-child { border-bottom: none; }
+.benefit-item .label { color: rgba(255,255,255,0.8); }
+.discount { font-weight: bold; font-size: 16px; }
+.points { color: #e6a23c; font-weight: bold; }
+.member-level { color: #409eff; font-weight: bold; }
+.max-level { color: #67c23a; font-weight: bold; }
+
 .profile-section { background: #fff; padding: 24px; border-radius: 12px; border: 1px solid #e8e5df; }
 .res-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f0eeea; }
 .res-left { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .order-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f0eeea; }
 .order-meta { display: block; font-size: 13px; color: #667085; margin-top: 2px; }
+
+/* 订单详情中的原价和折扣价对比 */
+.price-comparison { margin: 12px 0; padding: 12px; background: #f8f9fa; border-radius: 8px; }
+.price-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+.original-price { color: #999; }
+.original-price span:last-child { text-decoration: line-through; color: #999; }
+.discount { color: #e6a23c; }
+.discount-amount { color: #e6a23c; font-weight: 700; }
+
+.order-detail { padding: 12px; background: #f8f9fa; border-radius: 8px; margin-top: 8px; }
+.order-dish { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; color: #333; }
+.order-total { display: flex; justify-content: space-between; padding-top: 8px; margin-top: 8px; border-top: 1px solid #e8e5df; font-weight: 700; }
+.loading { text-align: center; color: #999; padding: 12px; font-size: 13px; }
 </style>

@@ -10,6 +10,19 @@
             <span>{{ item.name }} × {{ item.quantity }}</span>
             <span>{{ cents(item.subtotal) }}</span>
           </div>
+          
+          <!-- 原价和折扣价对比 -->
+          <div v-if="orderInfo.original_total_cents && orderInfo.original_total_cents !== orderInfo.total_cents" class="price-comparison">
+            <div class="detail-row original-price">
+              <span>原价</span>
+              <span class="strikethrough">{{ cents(orderInfo.original_total_cents) }}</span>
+            </div>
+            <div class="detail-row discount">
+              <span>折扣优惠（{{ (orderInfo.discount_rate * 10).toFixed(1) }}折）</span>
+              <span class="discount-amount">- {{ cents(orderInfo.original_total_cents - orderInfo.total_cents) }}</span>
+            </div>
+          </div>
+          
           <div class="detail-total">
             <span>应付金额</span>
             <strong>{{ cents(cart.orderTotal) }}</strong>
@@ -26,6 +39,9 @@
         <h2>支付成功</h2>
         <p>订单号：#{{ orderId }}</p>
         <p>支付金额：{{ cents(orderTotal) }}</p>
+        <p v-if="orderInfo.discount_rate && orderInfo.discount_rate < 1" class="discount-applied">
+          已应用会员折扣：{{ (orderInfo.discount_rate * 10).toFixed(1) }}折
+        </p>
         <p class="sandbox-note">（沙箱环境，非真实交易）</p>
         <el-button type="primary" style="margin-top: 20px" @click="$router.push('/profile')">查看订单</el-button>
         <el-button style="margin-top: 8px" @click="$router.push('/')">返回首页</el-button>
@@ -46,6 +62,7 @@ const loading = ref(false)
 const paid = ref(false)
 const orderId = ref(0)
 const orderTotal = ref(0)
+const orderInfo = ref<any>({})
 
 async function handlePay() {
   if (!cart.reservationId || !cart.selectedOrderItems.length) {
@@ -55,9 +72,15 @@ async function handlePay() {
   loading.value = true
   try {
     const items = cart.selectedOrderItems.map(i => ({ menuItemId: i.menuItemId, quantity: i.quantity }))
-    const order = await api.post<{ id: number; total_cents: number }>('/orders', { reservationId: cart.reservationId, items })
+    const order = await api.post<{ 
+      id: number; 
+      total_cents: number;
+      original_total_cents: number;
+      discount_rate: number;
+    }>('/orders', { reservationId: cart.reservationId, items })
     orderId.value = order.id
     orderTotal.value = order.total_cents
+    orderInfo.value = order  // 保存订单信息（包含原价和折扣率）
     paid.value = true
     cart.clearCart()
     cart.setReservationId(null)
@@ -79,6 +102,15 @@ async function handlePay() {
 .detail-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; }
 .detail-total { display: flex; justify-content: space-between; padding-top: 12px; margin-top: 8px; border-top: 2px solid #0f766e; font-size: 18px; }
 .detail-total strong { color: #e86f51; }
+
+/* 原价和折扣价对比样式 */
+.price-comparison { margin-top: 12px; padding: 12px; background: #fff; border-radius: 8px; border: 1px solid #e8e5df; }
+.original-price { color: #999; }
+.strikethrough { text-decoration: line-through; color: #999; }
+.discount { color: #e6a23c; }
+.discount-amount { color: #e6a23c; font-weight: 700; }
+.discount-applied { color: #0f766e; font-size: 14px; margin-top: 8px; }
+
 .pay-success { text-align: center; }
 .success-icon { width: 64px; height: 64px; border-radius: 50%; background: #0f766e; color: #fff; font-size: 32px; display: grid; place-items: center; margin: 0 auto 16px; }
 .sandbox-note { color: #667085; font-size: 13px; margin-top: 8px; }

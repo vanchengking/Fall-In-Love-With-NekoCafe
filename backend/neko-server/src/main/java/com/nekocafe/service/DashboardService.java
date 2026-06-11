@@ -1,9 +1,10 @@
 package com.nekocafe.service;
 
 import com.nekocafe.common.Normalizer;
-import com.nekocafe.mapper.CatalogMapper;
+import com.nekocafe.mapper.DashboardMapper;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -14,17 +15,16 @@ import java.util.Map;
 @Service
 public class DashboardService {
 
-    private final CatalogMapper catalogMapper;
+    private final DashboardMapper dashboardMapper;
 
-    public DashboardService(CatalogMapper catalogMapper) {
-        this.catalogMapper = catalogMapper;
+    public DashboardService(DashboardMapper dashboardMapper) {
+        this.dashboardMapper = dashboardMapper;
     }
 
     public Map<String, Object> summary(Long storeId) {
-        Map<String, Object> summary = catalogMapper.dashboardSummary(storeId);
-        Map<String, Object> revenue = catalogMapper.dashboardRevenue(storeId);
-        List<Map<String, Object>> alerts = catalogMapper.listAlerts(storeId);
-        Normalizer.boolField(alerts, "resolved");
+        Map<String, Object> summary = dashboardMapper.dashboardSummary(storeId);
+        Map<String, Object> revenue = dashboardMapper.dashboardRevenue(storeId);
+        List<Map<String, Object>> alerts = alerts(storeId);
 
         long todayReservations = summary == null ? 0 : Normalizer.toLong(summary.get("today_reservations"));
         long seated = summary == null ? 0 : Normalizer.toLong(summary.get("seated_count"));
@@ -46,5 +46,54 @@ public class DashboardService {
         out.put("repeat_rate", uniqueCustomers > 0 ? 0.42 : 0);
         out.put("alerts", alerts);
         return out;
+    }
+
+    public List<Map<String, Object>> alerts(Long storeId) {
+        List<Map<String, Object>> alerts = dashboardMapper.listAlerts(storeId);
+        Normalizer.boolField(alerts, "resolved");
+        return alerts;
+    }
+
+    public List<Map<String, Object>> reservationTrend(Long storeId, Integer days) {
+        int daysBack = normalizeDays(days) - 1;
+        List<Map<String, Object>> rows = new ArrayList<>(dashboardMapper.reservationTrend(storeId, daysBack));
+        for (Map<String, Object> row : rows) {
+            row.put("reservation_count", Normalizer.toLong(row.get("reservation_count")));
+            row.put("finished_count", Normalizer.toLong(row.get("finished_count")));
+            row.put("active_count", Normalizer.toLong(row.get("active_count")));
+        }
+        return rows;
+    }
+
+    public List<Map<String, Object>> revenueTrend(Long storeId, Integer days) {
+        int daysBack = normalizeDays(days) - 1;
+        List<Map<String, Object>> rows = new ArrayList<>(dashboardMapper.revenueTrend(storeId, daysBack));
+        for (Map<String, Object> row : rows) {
+            row.put("order_count", Normalizer.toLong(row.get("order_count")));
+            row.put("revenue_cents", Normalizer.toLong(row.get("revenue_cents")));
+        }
+        return rows;
+    }
+
+    public List<Map<String, Object>> storeOverview(Long storeId) {
+        List<Map<String, Object>> rows = new ArrayList<>(dashboardMapper.storeOverview(storeId));
+        for (Map<String, Object> row : rows) {
+            long tableCount = Normalizer.toLong(row.get("table_count"));
+            long finishedCount = Normalizer.toLong(row.get("finished_count"));
+            row.put("table_count", tableCount);
+            row.put("total_seats", Normalizer.toLong(row.get("total_seats")));
+            row.put("today_reservations", Normalizer.toLong(row.get("today_reservations")));
+            row.put("finished_count", finishedCount);
+            row.put("revenue_cents", Normalizer.toLong(row.get("revenue_cents")));
+            row.put("turnover_rate", Math.round((finishedCount / (double) Math.max(1, tableCount)) * 100) / 100.0);
+        }
+        return rows;
+    }
+
+    private static int normalizeDays(Integer days) {
+        if (days == null) {
+            return 7;
+        }
+        return Math.max(1, Math.min(days, 30));
     }
 }

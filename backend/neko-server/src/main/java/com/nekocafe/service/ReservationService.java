@@ -231,7 +231,7 @@ public class ReservationService {
             return created;
         }
         user.setName(r.customerName());
-        user.setPoints((user.getPoints() == null ? 0 : user.getPoints()) + 10);
+        // 预约不再增加积分，积分仅通过订单支付获得
         if (!r.preferences().isEmpty()) {
             user.setPreferences(new ArrayList<>(r.preferences()));
         }

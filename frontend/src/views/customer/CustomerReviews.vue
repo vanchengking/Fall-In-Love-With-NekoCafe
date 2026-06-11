@@ -2,7 +2,14 @@
   <div>
     <h2 style="margin-bottom: 20px">顾客评价</h2>
 
-    <div class="review-form panel">
+    <!-- 选项卡：全部评价 / 我的评价 -->
+    <el-tabs v-model="activeTab" @tab-change="handleTabChange">
+    <el-tab-pane label="全部评价" name="all" />
+    <el-tab-pane label="我的评价" name="my" />
+  </el-tabs>
+
+  <!-- 写评价表单（仅在"我的评价"tab显示） -->
+  <div v-if="activeTab === 'my'" class="review-form panel">
       <h3 style="margin-bottom: 12px">写评价</h3>
       <el-form label-position="top" @submit.prevent="submitReview">
         <el-form-item label="评分">
@@ -20,8 +27,9 @@
       </el-form>
     </div>
 
+    <!-- 评价列表 -->
     <div class="review-list">
-      <h3 style="margin: 24px 0 12px">全部评价</h3>
+      <h3 style="margin: 24px 0 12px">评价列表</h3>
       <div v-for="r in reviews" :key="r.id" class="review-card">
         <div class="review-header">
           <el-rate :model-value="r.rating" disabled :max="5" />
@@ -31,6 +39,14 @@
         <div class="review-meta">
           <span v-if="r.cat_id">猫咪 #{{ r.cat_id }}</span>
           <span v-if="r.reservation_id">预约 #{{ r.reservation_id }}</span>
+          <!-- 删除按钮（仅我的评价可删除） -->
+          <el-button
+            v-if="activeTab === 'my'"
+            type="danger"
+            size="small"
+            text
+            @click="deleteReview(r.id)"
+          >删除</el-button>
         </div>
       </div>
       <el-empty v-if="!reviews.length" description="暂无评价" />
@@ -40,7 +56,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { api } from '@/utils/http'
 import type { Review, Cat } from '@/types'
@@ -49,6 +65,7 @@ const auth = useAuthStore()
 const reviews = ref<Review[]>([])
 const cats = ref<Cat[]>([])
 const submitting = ref(false)
+const activeTab = ref<'all' | 'my'>('all')
 
 const form = reactive({
   storeId: 1,
@@ -61,6 +78,10 @@ const form = reactive({
 async function submitReview() {
   if (!form.content.trim()) {
     ElMessage.warning('请输入评价内容')
+    return
+  }
+  if (!form.rating) {
+    ElMessage.warning('请选择评分')
     return
   }
   submitting.value = true
@@ -77,16 +98,37 @@ async function submitReview() {
     form.catId = null
     form.rating = 5
     await loadReviews()
-  } catch (e) {
-    ElMessage.error((e as Error).message)
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.message || e.message || '提交失败')
   } finally {
     submitting.value = false
   }
 }
 
 async function loadReviews() {
-  try { reviews.value = await api.get<Review[]>('/reviews', { storeId: form.storeId }) }
-  catch { reviews.value = [] }
+  try {
+    if (activeTab.value === 'my') {
+      reviews.value = await api.get<Review[]>('/reviews/my')
+    } else {
+      // 修复：调用正确的端点 /reviews/store/{storeId}
+      reviews.value = await api.get<Review[]>(`/reviews/store/${form.storeId}`)
+    }
+  } catch { reviews.value = [] }
+}
+
+async function deleteReview(id: number) {
+  try {
+    await ElMessageBox.confirm('确定删除这条评价？', '提示', { type: 'warning' })
+    await api.remove(`/reviews/${id}`)
+    ElMessage.success('删除成功')
+    await loadReviews()
+  } catch (e: any) {
+    if (e !== 'cancel') ElMessage.error(e.message)
+  }
+}
+
+function handleTabChange() {
+  loadReviews()
 }
 
 onMounted(async () => {
