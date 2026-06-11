@@ -29,6 +29,7 @@ const router = createRouter({
         { path: 'payment', name: 'customer-payment', component: () => import('@/views/customer/CustomerPayment.vue') },
         { path: 'reviews', name: 'customer-reviews', component: () => import('@/views/customer/CustomerReviews.vue') },
         { path: 'profile', name: 'customer-profile', component: () => import('@/views/customer/CustomerProfile.vue') },
+        { path: 'recommend', name: 'customer-recommend', component: () => import('@/views/customer/CustomerRecommend.vue') },
       ],
     },
 
