@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nekocafe.common.ApiResponse;
 import com.nekocafe.common.Payloads;
 import com.nekocafe.dto.ReservationRequest;
+import com.nekocafe.dto.ReservationRescheduleRequest;
 import com.nekocafe.security.AuthUser;
 import com.nekocafe.service.ReservationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -65,6 +66,16 @@ public class ReservationController {
     public ApiResponse cancel(@PathVariable Long id,
                               @AuthenticationPrincipal AuthUser actor) {
         return ApiResponse.of(reservationService.cancel(id, actor));
+    }
+
+    @PatchMapping("/{id}/reschedule")
+    @Operation(summary = "改约预约：更新时间、人数和桌位，释放原桌位时段占用")
+    public ApiResponse reschedule(@PathVariable Long id,
+                                  @RequestBody Map<String, Object> body,
+                                  @AuthenticationPrincipal AuthUser actor) {
+        ReservationRescheduleRequest req =
+                objectMapper.convertValue(Payloads.unwrap(body), ReservationRescheduleRequest.class);
+        return ApiResponse.of(reservationService.reschedule(id, req, actor));
     }
 
     @Operation(summary = "预约状态变更事件记录")
