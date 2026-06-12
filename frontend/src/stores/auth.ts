@@ -1,9 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api } from '@/utils/http'
-import type { AuthUser } from '@/types'
+import type { AuthResult, AuthUser } from '@/types'
 
-const DEMO_LOGIN = { mobileNumber: '13800000006', code: '8888' }
+const DEMO_LOGIN = { mobileNumber: '13800000006', code: '123456' }
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(null)
@@ -28,10 +28,12 @@ export const useAuthStore = defineStore('auth', () => {
   async function authenticate(): Promise<AuthUser | null> {
     try {
       await api.post('/auth/sms/send', { mobileNumber: DEMO_LOGIN.mobileNumber })
-      const result = await api.post<{ token: string; user: AuthUser }>('/auth/login', DEMO_LOGIN)
-      token.value = result.token
+      const result = await api.post<AuthResult>('/auth/login', DEMO_LOGIN)
+      // 优先读取 access_token，兼容旧的 token 字段
+      const accessToken = result.access_token ?? result.token ?? null
+      token.value = accessToken
       user.value = result.user
-      localStorage.setItem('neko-auth', JSON.stringify({ token: result.token, user: result.user }))
+      localStorage.setItem('neko-auth', JSON.stringify({ token: accessToken, user: result.user }))
       return result.user
     } catch {
       token.value = null

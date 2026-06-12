@@ -38,7 +38,23 @@ docker compose up --build
 
 ## 演示账号
 
-固定验证码：**8888**（沙箱环境）
+固定验证码：**123456**（沙箱环境）
+
+登录流程：`POST /api/auth/sms/send` 发送验证码（沙箱直接返回），再 `POST /api/auth/login` 携带手机号与验证码 `123456`。登录响应：
+
+```json
+{
+  "data": {
+    "access_token": "<JWT>",
+    "token_type": "Bearer",
+    "expires_in": 86400,
+    "user": { "id": 1, "name": "林小满", "role": "customer", "...": "..." },
+    "token": "<JWT>（兼容旧字段，等同 access_token）"
+  }
+}
+```
+
+JWT 解码后含显式 `userId` 与 `role` claim（FR-AUTH-002）。
 
 | 角色 | 手机号 | 登录后页面 | 权限范围 |
 |------|--------|-----------|----------|
@@ -152,8 +168,15 @@ backend/neko-server/src/main/java/com/nekocafe/
 
 | 方法 | 路径 | 权限 | 说明 |
 |------|------|------|------|
-| POST | /api/auth/sms/send | 公开 | 发送验证码（沙箱） |
-| POST | /api/auth/login | 公开 | 登录，返回 JWT |
+| POST | /api/auth/sms/send | 公开 | 发送验证码（沙箱固定 123456） |
+| POST | /api/auth/login | 公开 | 登录，返回 access_token（JWT 含 userId/role） |
+| GET | /api/users/me | 需登录 | 当前用户资料 |
+| PUT | /api/users/me | 需登录 | 更新姓名/手机号/偏好（手机号唯一性校验，冲突 409） |
+| GET | /api/users/me/member | 需登录 | 会员等级与权益 |
+| GET | /api/users/me/points/history | 需登录 | 积分明细（按时间倒序，含来源与变动后余额） |
+| ANY | /api/admin/dashboard/** | manager/operator/admin | 管理看板查询 |
+| ANY | /api/admin/stores/** | manager/operator/admin | 门店管理 |
+| ANY | /api/admin/tables/** | manager/operator/admin | 桌位管理 |
 | GET | /api/stores | 公开 | 门店列表 |
 | GET | /api/tables | 公开 | 桌位列表+时段可用性 |
 | GET | /api/menu-items | 公开 | 菜品列表 |
@@ -180,7 +203,7 @@ backend/neko-server/src/main/java/com/nekocafe/
 
 | 模块 | 前端页面 | 功能说明 |
 |------|----------|----------|
-| M1 用户与会员 | Login.vue, CustomerProfile.vue | SMS 登录、JWT 持久化、会员等级/积分展示、偏好标签 |
+| M1 用户与会员 | Login.vue, CustomerProfile.vue | SMS 登录、JWT 持久化、资料维护（姓名/手机号/偏好）、会员等级/积分展示、积分明细 |
 | M2 门店与桌位 | CustomerStores.vue, CustomerStoreDetail.vue, StaffTables.vue | 门店列表、猫咪/桌位/菜单详情、可视化选桌、排队显示 |
 | M3 预约与点单 | CustomerReservation.vue, CustomerOrder.vue, CustomerPayment.vue | 可视化选桌+偏好标签+推荐、购物车、支付沙箱 |
 | M4 订单与履约 | CustomerProfile.vue, StaffOrders.vue | 订单列表、取消预约、状态机（created→booked→seated→dining→finished） |
@@ -202,6 +225,8 @@ backend/neko-server/src/main/java/com/nekocafe/
   - `db/migrations/V001__init.sql`：基础表结构与初始种子。
   - `db/migrations/V002__d01_upgrade.sql`：D-01 升级——预约状态机扩展（活跃状态 `created/booked/seated/dining`）、桌位/用户双重活跃唯一约束、`reservation_events` 审计表等。
   - `db/migrations/V003__reservation_backend_completion.sql`：预约后台补全——新增推荐日志表 `recommendation_logs`、`reservation_events` 状态索引，并幂等兜底唯一约束（兼容已执行过 V001/V002 的库）。
+  - `db/migrations/V004__m6_dashboard.sql` / `V005__m2_store_table.sql` / `V006__m1_review_module.sql`：看板、门店桌位管理、评价模块扩展。
+  - `db/migrations/V007__m1_member_points.sql`：会员积分流水表 `point_transactions`——记录每次积分变更的 delta 与变动后余额，`(source_type, source_id)` 唯一约束防重复发放（预约完成 +10 分、订单支付/撤销均落流水）。
 - 演示数据：`db/seed_data.sql`（非 Flyway 管理，按需手动导入）——审计事件遵循 `booked→seated→dining→finished` 状态机口径。
 - MySQL 字符集：`utf8mb4`（docker-compose 中配置 `--character-set-server=utf8mb4`）
 - 种子数据包含：6个用户、2个门店、4只猫、5道菜品、17条预约、11个订单、12条评价、12条健康记录
@@ -225,6 +250,7 @@ mvn -f backend/neko-server/pom.xml spring-boot:run
 | 中文乱码 | 确保 MySQL 使用 `--character-set-server=utf8mb4`，Nginx 配置 `charset utf-8` |
 | 端口被占用 | 停止占用进程或修改 docker-compose.yml 端口映射 |
 | 数据库需要重置 | `docker compose down -v` 清空数据卷后再 `up --build` |
+| 全新本地库（local-db）V005 迁移报语法错误 | `V005__m2_store_table.sql` 使用了 `ADD COLUMN IF NOT EXISTS`，团队 RDS（阿里云 MySQL 8.0.36）可执行但本地 mysql:8.4 不支持。临时方案：手工执行去掉 `IF NOT EXISTS` 的 V005 及后续迁移，再以 `SPRING_FLYWAY_ENABLED=false` 启动后端（修改 V005 文件会导致 RDS 上 Flyway 校验和不匹配，需配合 repair，谨慎处理） |
 | 照片上传失败 | 确保用店长/管理员/猫咪管家角色登录，检查后端日志 |
 
 ## 团队

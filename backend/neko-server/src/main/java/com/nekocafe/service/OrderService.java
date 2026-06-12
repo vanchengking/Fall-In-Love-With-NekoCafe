@@ -114,15 +114,12 @@ public class OrderService {
         paymentTransactionMapper.insert(new PaymentTransaction(
                 order.getId(), request.reservationId(), (int) discountedTotal, "sandbox", "paid", txnRef));
 
-        // 支付成功后增加积分（按折后价，1元=1积分）
+        // 支付成功后增加积分（按折后价，1元=1积分），同步落积分流水
         // 若积分增加失败，抛出异常触发事务回滚，订单不会创建
         try {
             int pointsToAdd = Math.toIntExact(discountedTotal / 100);
-            System.out.println("[OrderService] 订单#" + order.getId() + " 支付成功，用户ID=" + userId + "，准备增加积分: " + pointsToAdd);
-            userService.addPoints(userId, pointsToAdd);
-            System.out.println("[OrderService] 积分增加成功，用户ID=" + userId);
+            userService.changePoints(userId, pointsToAdd, "order_paid", order.getId(), "订单支付积分（1元=1积分）");
         } catch (Exception e) {
-            System.err.println("[OrderService] 积分增加失败: " + e.getMessage());
             throw ApiException.badRequest("积分增加失败：" + e.getMessage());
         }
 
@@ -153,12 +150,12 @@ public class OrderService {
             throw ApiException.badRequest("只能撤销已支付的订单");
         }
 
-        // 先返还积分（如果失败，事务回滚，订单状态不会更新）
+        // 先扣回支付时发放的积分（如果失败，事务回滚，订单状态不会更新）
         int pointsToDeduct = order.getTotalCents() / 100;
         try {
-            userService.addPoints(order.getUserId(), -pointsToDeduct);
+            userService.changePoints(order.getUserId(), -pointsToDeduct, "order_cancelled", order.getId(), "订单撤销，扣回支付积分");
         } catch (Exception e) {
-            // 积分返还失败，抛出异常触发事务回滚
+            // 积分扣回失败，抛出异常触发事务回滚
             throw ApiException.badRequest("积分返还失败：" + e.getMessage());
         }
 

@@ -11,7 +11,7 @@
         </el-form-item>
 
         <el-form-item v-if="codeSent" label="验证码" prop="code">
-          <el-input v-model="form.code" placeholder="输入验证码" maxlength="4" />
+          <el-input v-model="form.code" placeholder="输入验证码" maxlength="6" />
         </el-form-item>
 
         <el-button v-if="!codeSent" type="primary" style="width: 100%" :loading="sending" @click="handleSendCode">
@@ -29,7 +29,7 @@
       <div class="demo-section">
         <div class="demo-header">
           <span class="demo-label">演示账号</span>
-          <span class="demo-hint">沙箱验证码统一为 <strong>8888</strong></span>
+          <span class="demo-hint">沙箱验证码统一为 <strong>123456</strong></span>
         </div>
         <div class="demo-grid">
           <div v-for="account in demoAccounts" :key="account.phone" class="demo-item" @click="quickLogin(account)">
@@ -53,7 +53,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { api } from '@/utils/http'
 import { useAuthStore } from '@/stores/auth'
 import { roleDefaultRoute } from '@/router'
-import type { AuthUser } from '@/types'
+import type { AuthResult } from '@/types'
 
 const router = useRouter()
 const route = useRoute()
@@ -82,7 +82,7 @@ const rules: FormRules = {
   ],
   code: [
     { required: true, message: '请输入验证码', trigger: 'blur' },
-    { len: 4, message: '验证码为4位', trigger: 'blur' },
+    { len: 6, message: '验证码为6位', trigger: 'blur' },
   ],
 }
 
@@ -100,7 +100,7 @@ async function handleSendCode() {
     try {
       await api.post('/auth/sms/send', { mobileNumber: form.mobileNumber })
       codeSent.value = true
-      ElMessage.success('验证码已发送（沙箱固定：8888）')
+      ElMessage.success('验证码已发送（沙箱固定：123456）')
     } catch (e) {
       ElMessage.error((e as Error).message)
     } finally {
@@ -115,13 +115,15 @@ async function handleLogin() {
     if (!valid) return
     logging.value = true
     try {
-      const result = await api.post<{ token: string; user: AuthUser }>('/auth/login', {
+      const result = await api.post<AuthResult>('/auth/login', {
         mobileNumber: form.mobileNumber,
         code: form.code,
       })
-      auth.token = result.token
+      // 优先读取 access_token，兼容旧的 token 字段
+      const accessToken = result.access_token ?? result.token ?? null
+      auth.token = accessToken
       auth.user = result.user
-      localStorage.setItem('neko-auth', JSON.stringify({ token: result.token, user: result.user }))
+      localStorage.setItem('neko-auth', JSON.stringify({ token: accessToken, user: result.user }))
       ElMessage.success(`欢迎回来，${result.user.name || '用户'}`)
       const redirect = (route.query.redirect as string) || roleDefaultRoute[result.user.role] || '/'
       router.push(redirect)

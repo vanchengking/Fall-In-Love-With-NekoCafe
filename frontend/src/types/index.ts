@@ -128,8 +128,23 @@ export interface AuthUser {
 }
 
 export interface AuthResult {
-  token: string
+  access_token: string
+  token_type?: string
+  expires_in?: number
+  /** 兼容旧响应：等同 access_token，优先读取 access_token */
+  token?: string
   user: AuthUser
+}
+
+export interface PointTransaction {
+  id: number
+  user_id: number
+  delta: number
+  balance_after: number
+  source_type: string
+  source_id?: number | null
+  reason?: string | null
+  created_at?: string
 }
 
 export interface ReservationForm {

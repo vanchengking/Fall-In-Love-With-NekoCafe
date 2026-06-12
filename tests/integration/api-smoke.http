@@ -21,19 +21,19 @@ GET {{base}}/api/recommendations?storeId=1&userId=1
 ### 2c. 推荐——带时段，仅推荐当前可用桌位
 GET {{base}}/api/recommendations?storeId=1&preferences=window&date=2026-09-01&time=19:00&partySize=2
 
-### 3. 登录店员（捕获 token；沙箱验证码 8888）
+### 3. 登录店员（捕获 token；沙箱验证码 123456；响应含 access_token，token 为兼容别名）
 # @name loginStaff
 POST {{base}}/api/auth/login
 Content-Type: application/json
 
-{ "mobileNumber": "13800000002", "code": "8888", "role": "staff" }
+{ "mobileNumber": "13800000002", "code": "123456", "role": "staff" }
 
 ### 4. 登录顾客（user1，用于取消测试）
 # @name loginCustomer
 POST {{base}}/api/auth/login
 Content-Type: application/json
 
-{ "mobileNumber": "13800000001", "code": "8888", "role": "customer" }
+{ "mobileNumber": "13800000001", "code": "123456", "role": "customer" }
 
 ### 5. 创建预约——自动分配桌位（期望 201，返回 table_code 与 status_label="已预约"）
 # @name createForFlow
@@ -58,35 +58,35 @@ GET {{base}}/api/reservations/{{createForFlow.response.body.$.data.id}}/events
 ### 7. 非法跳转——booked 直接到 finished（期望 400，必须先经过 seated/dining）
 PATCH {{base}}/api/reservations/{{createForFlow.response.body.$.data.id}}/status
 Content-Type: application/json
-Authorization: Bearer {{loginStaff.response.body.$.data.token}}
+Authorization: Bearer {{loginStaff.response.body.$.data.access_token}}
 
 { "status": "finished" }
 
 ### 8. 合法：booked -> seated（期望 200，status_label="已入座"）
 PATCH {{base}}/api/reservations/{{createForFlow.response.body.$.data.id}}/status
 Content-Type: application/json
-Authorization: Bearer {{loginStaff.response.body.$.data.token}}
+Authorization: Bearer {{loginStaff.response.body.$.data.access_token}}
 
 { "status": "seated" }
 
 ### 9. 关键：seated 直接到 finished（期望 400，完桌必须先经过 dining）
 PATCH {{base}}/api/reservations/{{createForFlow.response.body.$.data.id}}/status
 Content-Type: application/json
-Authorization: Bearer {{loginStaff.response.body.$.data.token}}
+Authorization: Bearer {{loginStaff.response.body.$.data.access_token}}
 
 { "status": "finished" }
 
 ### 10. 合法：seated -> dining（期望 200，status_label="用餐中"）
 PATCH {{base}}/api/reservations/{{createForFlow.response.body.$.data.id}}/status
 Content-Type: application/json
-Authorization: Bearer {{loginStaff.response.body.$.data.token}}
+Authorization: Bearer {{loginStaff.response.body.$.data.access_token}}
 
 { "status": "dining" }
 
 ### 11. 合法：dining -> finished（期望 200，status_label="已完成"，至此完整走完状态机）
 PATCH {{base}}/api/reservations/{{createForFlow.response.body.$.data.id}}/status
 Content-Type: application/json
-Authorization: Bearer {{loginStaff.response.body.$.data.token}}
+Authorization: Bearer {{loginStaff.response.body.$.data.access_token}}
 
 { "status": "finished" }
 
@@ -99,7 +99,7 @@ Content-Type: application/json
 ### 13. 权限——顾客调用 /status（期望 403，状态流转仅限 staff/manager/operator/admin）
 PATCH {{base}}/api/reservations/{{createForFlow.response.body.$.data.id}}/status
 Content-Type: application/json
-Authorization: Bearer {{loginCustomer.response.body.$.data.token}}
+Authorization: Bearer {{loginCustomer.response.body.$.data.access_token}}
 
 { "status": "seated" }
 
@@ -152,7 +152,7 @@ Content-Type: application/json
 
 ### 15b. 顾客取消本人预约（期望 200，status_label="已取消"，事件备注"顾客取消预约"）
 PATCH {{base}}/api/reservations/{{createForCancel.response.body.$.data.id}}/cancel
-Authorization: Bearer {{loginCustomer.response.body.$.data.token}}
+Authorization: Bearer {{loginCustomer.response.body.$.data.access_token}}
 
 ### 16. 预约列表——确认返回中文 status_label（数据库仍存英文 status）
 GET {{base}}/api/reservations?storeId=1

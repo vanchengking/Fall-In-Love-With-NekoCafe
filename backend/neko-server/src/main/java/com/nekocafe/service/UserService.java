@@ -1,24 +1,32 @@
 package com.nekocafe.service;
 
-import com.nekocafe.entity.User;
-import com.nekocafe.mapper.UserMapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.nekocafe.common.ApiException;
+import com.nekocafe.domain.ReservationValidator;
+import com.nekocafe.entity.PointTransaction;
+import com.nekocafe.entity.User;
+import com.nekocafe.mapper.PointTransactionMapper;
+import com.nekocafe.mapper.UserMapper;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
- * 用户服务：会员等级、积分管理、资料维护
+ * 用户服务：会员等级、积分管理（含流水）、资料维护
  */
 @Service
 public class UserService {
 
     private final UserMapper userMapper;
+    private final PointTransactionMapper pointTransactionMapper;
 
-    public UserService(UserMapper userMapper) {
+    public UserService(UserMapper userMapper, PointTransactionMapper pointTransactionMapper) {
         this.userMapper = userMapper;
+        this.pointTransactionMapper = pointTransactionMapper;
     }
 
     /**
@@ -42,9 +50,10 @@ public class UserService {
     }
 
     /**
-     * 更新用户资料
+     * 更新用户资料：仅允许本人维护姓名/手机号/偏好；
+     * role、points、member_level 由系统规则维护，不接受该入口修改。
      */
-    public Map<String, Object> updateProfile(Long userId, String name, List<String> preferences) {
+    public Map<String, Object> updateProfile(Long userId, String name, String mobileNumber, List<String> preferences) {
         User user = userMapper.selectById(userId);
         if (user == null) {
             throw ApiException.notFound("用户不存在");
@@ -54,37 +63,71 @@ public class UserService {
             user.setName(name.trim());
         }
 
+        if (mobileNumber != null && !mobileNumber.isBlank()) {
+            String mobile = ReservationValidator.normalizeMobile(mobileNumber);
+            if (mobile.length() < 8) {
+                throw ApiException.badRequest("手机号至少包含 8 位数字");
+            }
+            if (!mobile.equals(user.getMobileNumber())) {
+                Long conflicts = userMapper.selectCount(
+                        new QueryWrapper<User>().eq("mobile_number", mobile).ne("id", userId));
+                if (conflicts != null && conflicts > 0) {
+                    throw ApiException.conflict("该手机号已被其他账号使用");
+                }
+                user.setMobileNumber(mobile);
+            }
+        }
+
         if (preferences != null) {
             user.setPreferences(preferences);
         }
 
-        userMapper.updateById(user);
+        try {
+            userMapper.updateById(user);
+        } catch (DuplicateKeyException ex) {
+            // 并发改号时由 users.mobile_number 唯一约束兜底
+            throw ApiException.conflict("该手机号已被其他账号使用");
+        }
 
         return getProfile(userId);
     }
 
     /**
-     * 增加/扣减积分，自动更新会员等级
+     * 积分变更统一入口：同一事务内更新 users.points/member_level 并写入积分流水。
+     * (sourceType, sourceId) 命中唯一约束时抛 409，保证同一来源不会重复发放；
+     * 任一步失败整体回滚，调用方事务（如预约完成流转）随之回滚。
      */
-    public Map<String, Object> addPoints(Long userId, Integer delta) {
+    @Transactional
+    public Map<String, Object> changePoints(Long userId, int delta, String sourceType, Long sourceId, String reason) {
         User user = userMapper.selectById(userId);
         if (user == null) {
             throw ApiException.notFound("用户不存在");
         }
 
-        int oldPoints = user.getPoints();
-        int newPoints = oldPoints + delta;
+        int newPoints = user.getPoints() + delta;
         if (newPoints < 0) {
             throw ApiException.badRequest("积分不足");
         }
-
-        System.out.println("[UserService] addPoints: userId=" + userId + ", delta=" + delta + ", oldPoints=" + oldPoints + ", newPoints=" + newPoints);
 
         user.setPoints(newPoints);
         user.setMemberLevel(calculateMemberLevel(newPoints));
         userMapper.updateById(user);
 
+        try {
+            pointTransactionMapper.insert(
+                    new PointTransaction(userId, delta, newPoints, sourceType, sourceId, reason));
+        } catch (DuplicateKeyException ex) {
+            throw ApiException.conflict("该来源的积分已发放，不可重复入账");
+        }
+
         return getProfile(userId);
+    }
+
+    /**
+     * 当前用户积分明细（最新在前），用于积分追溯展示。
+     */
+    public List<Map<String, Object>> getPointsHistory(Long userId) {
+        return pointTransactionMapper.listByUser(userId);
     }
 
     /**

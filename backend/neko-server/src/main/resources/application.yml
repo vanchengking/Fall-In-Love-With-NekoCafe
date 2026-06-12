@@ -57,7 +57,7 @@ neko:
     ttl-seconds: ${NEKO_JWT_TTL_SECONDS:86400}
   sms:
     # 演示固定验证码；同时写入 Redis，登录时优先校验 Redis 中的验证码
-    fixed-code: ${NEKO_SMS_FIXED_CODE:8888}
+    fixed-code: ${NEKO_SMS_FIXED_CODE:123456}
     ttl-seconds: ${NEKO_SMS_TTL_SECONDS:300}
   cache:
     stores-ttl-seconds: ${NEKO_CACHE_STORES_TTL:60}

@@ -32,17 +32,22 @@ public class ReservationService {
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
     /** 可代客取消/流转预约的后台角色。 */
     private static final Set<String> STAFF_ROLES = Set.of("staff", "manager", "operator", "admin");
+    /** FR-MEMBER-002：每完成一次预约发放的积分。 */
+    static final int POINTS_PER_FINISHED_RESERVATION = 10;
 
     private final ReservationMapper reservationMapper;
     private final ReservationEventMapper reservationEventMapper;
     private final UserMapper userMapper;
+    private final UserService userService;
 
     public ReservationService(ReservationMapper reservationMapper,
                               ReservationEventMapper reservationEventMapper,
-                              UserMapper userMapper) {
+                              UserMapper userMapper,
+                              UserService userService) {
         this.reservationMapper = reservationMapper;
         this.reservationEventMapper = reservationEventMapper;
         this.userMapper = userMapper;
+        this.userService = userService;
     }
 
     public List<Map<String, Object>> list(String date, String mobileNumber, Long storeId, String status) {
@@ -181,6 +186,13 @@ public class ReservationService {
             reservationMapper.insertSeatedAlert(current.getStoreId(), current.getId());
         }
 
+        if (to == ReservationStatus.FINISHED) {
+            // FR-MEMBER-002：预约完成发放积分并落流水。行锁 + 状态机保证只流转一次，
+            // 流水 (source_type, source_id) 唯一约束兜底防重复；发放失败则整个流转回滚
+            userService.changePoints(current.getUserId(), POINTS_PER_FINISHED_RESERVATION,
+                    "reservation_finished", current.getId(), "预约完成奖励");
+        }
+
         return decorate(reservationMapper.getReservationDetail(current.getId()));
     }
 
@@ -231,7 +243,7 @@ public class ReservationService {
             return created;
         }
         user.setName(r.customerName());
-        // 预约不再增加积分，积分仅通过订单支付获得
+        // 创建预约本身不增加积分；积分在预约完成（finished）或订单支付时经流水发放
         if (!r.preferences().isEmpty()) {
             user.setPreferences(new ArrayList<>(r.preferences()));
         }

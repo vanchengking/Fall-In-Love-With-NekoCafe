@@ -61,7 +61,11 @@ public class AuthService {
         String token = jwtService.issue(user.getId(), user.getRole(), user.getName(), user.getMobileNumber());
 
         Map<String, Object> out = new LinkedHashMap<>();
+        out.put("access_token", token);
+        out.put("token_type", "Bearer");
+        out.put("expires_in", jwtService.ttlSeconds());
         out.put("user", user);
+        // 兼容旧前端：token 是 access_token 的别名，前端应优先读取 access_token
         out.put("token", token);
         return out;
     }

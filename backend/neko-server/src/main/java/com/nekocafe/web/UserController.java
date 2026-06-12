@@ -14,10 +14,13 @@ import java.util.Map;
 
 /**
  * 用户资料与会员管理
- * GET  /api/users/me          当前用户资料
- * PUT  /api/users/me          更新姓名/偏好
- * POST /api/users/me/points   增加积分（内部调用）
- * GET  /api/users/me/member   会员等级与权益
+ * GET  /api/users/me                 当前用户资料
+ * PUT  /api/users/me                 更新姓名/手机号/偏好
+ * GET  /api/users/me/member          会员等级与权益
+ * GET  /api/users/me/points/history  积分明细（最新在前）
+ *
+ * 积分不提供自助修改接口：积分仅由业务规则发放（预约完成、订单支付/撤销），
+ * 全部经 {@code UserService.changePoints} 落积分流水。
  */
 @RestController
 @RequestMapping("/api/users")
@@ -36,32 +39,33 @@ public class UserController {
         return ApiResponse.of(userService.getProfile(user.id()));
     }
 
-    @Operation(summary = "更新当前用户资料", description = "可更新姓名/偏好")
+    @Operation(summary = "更新当前用户资料", description = "可更新姓名/手机号/偏好；角色、积分、会员等级不可经此修改")
     @PutMapping("/me")
     public ApiResponse updateProfile(@RequestBody Map<String, Object> body,
                                      @AuthenticationPrincipal AuthUser user) {
         // 前端 http.ts 会用 wrapData() 包装一层 {data: ...}，需要解包
         Map<String, Object> payload = (Map<String, Object>) Payloads.unwrap(body);
-        String name = payload.containsKey("name") ? payload.get("name").toString() : null;
+        Object nameRaw = payload.get("name");
+        String name = nameRaw == null ? null : String.valueOf(nameRaw);
+        Object mobileRaw = payload.get("mobileNumber");
+        if (mobileRaw == null) {
+            mobileRaw = payload.get("mobile_number");
+        }
+        String mobileNumber = mobileRaw == null ? null : String.valueOf(mobileRaw);
         List<String> prefs = payload.containsKey("preferences") ?
                 (List<String>) payload.get("preferences") : null;
-        return ApiResponse.of(userService.updateProfile(user.id(), name, prefs));
-    }
-
-    @Operation(summary = "增加积分", description = "delta 为正表示增加，为负表示扣减")
-    @PostMapping("/me/points")
-    public ApiResponse addPoints(@RequestBody Map<String, Object> body,
-                                 @AuthenticationPrincipal AuthUser user) {
-        if (!body.containsKey("delta")) {
-            throw new RuntimeException("delta is required");
-        }
-        Integer delta = Integer.valueOf(body.get("delta").toString());
-        return ApiResponse.of(userService.addPoints(user.id(), delta));
+        return ApiResponse.of(userService.updateProfile(user.id(), name, mobileNumber, prefs));
     }
 
     @Operation(summary = "获取会员等级与权益")
     @GetMapping("/me/member")
     public ApiResponse memberInfo(@AuthenticationPrincipal AuthUser user) {
         return ApiResponse.of(userService.getMemberInfo(user.id()));
+    }
+
+    @Operation(summary = "获取积分明细", description = "按时间倒序返回 delta/balance_after/source_type/source_id/reason/created_at")
+    @GetMapping("/me/points/history")
+    public ApiResponse pointsHistory(@AuthenticationPrincipal AuthUser user) {
+        return ApiResponse.of(userService.getPointsHistory(user.id()));
     }
 }

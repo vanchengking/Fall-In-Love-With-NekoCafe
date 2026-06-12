@@ -40,7 +40,10 @@ public class SecurityConfig {
                         .requestMatchers("/healthz", "/error", "/favicon.ico").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/**").permitAll()
+                        // 管理接口必须排在 GET /api/** permitAll 之前，否则顾客可匿名读取管理数据
+                        .requestMatchers("/api/admin/dashboard/**", "/api/admin/stores/**", "/api/admin/tables/**")
+                            .hasAnyRole("MANAGER", "OPERATOR", "ADMIN")
+                        .requestMatchers("/api/admin/**").hasAnyRole("MANAGER", "OPERATOR", "ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/reservations/*/status")
                             .hasAnyRole("STAFF", "MANAGER", "OPERATOR", "ADMIN")
                         // 取消接口对所有登录用户开放，由服务层校验本人/后台角色
@@ -48,12 +51,13 @@ public class SecurityConfig {
                             .authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/cat-health-records")
                             .hasAnyRole("CAT_KEEPER", "MANAGER", "ADMIN")
+                        // 个人资料/会员/积分明细均为本人数据，必须登录（不能落入 GET /api/** permitAll）
+                        .requestMatchers("/api/users/me", "/api/users/me/**").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/upload").authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/api/cats/*/photo", "/api/menu-items/*/photo").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/reviews").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/api/reviews/**").authenticated()
-                        .requestMatchers(HttpMethod.PUT, "/api/users/me").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/users/me/points").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/reservations", "/api/orders").authenticated()
                         .anyRequest().authenticated())
                 .exceptionHandling(ex -> ex

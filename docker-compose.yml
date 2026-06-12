@@ -13,7 +13,7 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: "6379"
       NEKO_JWT_SECRET: "${NEKO_JWT_SECRET:-neko-cafe-dev-secret-please-change-in-prod-0123456789abcdef}"
-      NEKO_SMS_FIXED_CODE: "${NEKO_SMS_FIXED_CODE:-8888}"
+      NEKO_SMS_FIXED_CODE: "${NEKO_SMS_FIXED_CODE:-123456}"
       NEKO_UPLOAD_DIR: /app/uploads
     ports:
       - "8080:8080"

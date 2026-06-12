@@ -30,6 +30,8 @@ public class JwtService {
         long now = System.currentTimeMillis();
         return Jwts.builder()
                 .subject(String.valueOf(userId))
+                // FR-AUTH-002：除 sub 外显式携带 userId 与 role，便于网关/前端直接解码使用
+                .claim("userId", userId)
                 .claim("role", role)
                 .claim("name", name)
                 .claim("mobile", mobile)

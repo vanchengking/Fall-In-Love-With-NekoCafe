@@ -34,6 +34,21 @@
 
       <div class="profile-section">
         <el-tabs v-model="activeTab">
+          <el-tab-pane label="个人资料" name="account">
+            <div class="prefs-section">
+              <p class="prefs-tip">姓名、手机号、用餐偏好可自行维护；会员等级与积分由系统规则计算，仅供查看。</p>
+              <el-form label-position="top" style="max-width: 360px">
+                <el-form-item label="姓名">
+                  <el-input v-model="profileForm.name" placeholder="请输入姓名" maxlength="32" />
+                </el-form-item>
+                <el-form-item label="手机号">
+                  <el-input v-model="profileForm.mobileNumber" placeholder="请输入手机号" maxlength="11" />
+                </el-form-item>
+                <el-button type="primary" :loading="savingProfile" @click="saveProfile">保存资料</el-button>
+              </el-form>
+            </div>
+          </el-tab-pane>
+
           <el-tab-pane label="我的预约" name="reservations">
             <div v-for="r in reservations" :key="r.id" class="res-item">
               <div class="res-left">
@@ -144,6 +159,29 @@
               <el-button type="primary" size="small" style="margin-top: 16px" @click="savePreferences" :loading="savingPrefs">保存偏好</el-button>
             </div>
           </el-tab-pane>
+
+          <el-tab-pane label="积分明细" name="points">
+            <div class="points-toolbar">
+              <span>当前积分：<strong class="points">{{ profile.points ?? '-' }}</strong></span>
+              <el-button size="small" :loading="loadingPoints" @click="refreshPoints">刷新</el-button>
+            </div>
+            <el-table v-if="pointsHistory.length" :data="pointsHistory" size="small">
+              <el-table-column prop="created_at" label="时间" width="160" />
+              <el-table-column label="变动" width="80">
+                <template #default="{ row }">
+                  <span :class="row.delta >= 0 ? 'delta-plus' : 'delta-minus'">{{ row.delta >= 0 ? `+${row.delta}` : row.delta }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="balance_after" label="变动后余额" width="100" />
+              <el-table-column label="来源" width="150">
+                <template #default="{ row }">
+                  {{ sourceLabel(row.source_type) }}<span v-if="row.source_id" class="source-id"> #{{ row.source_id }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="reason" label="说明" min-width="140" />
+            </el-table>
+            <el-empty v-else description="暂无积分变动记录" />
+          </el-tab-pane>
         </el-tabs>
       </div>
     </div>
@@ -151,14 +189,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { reactive, ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { api } from '@/utils/http'
 import { cents, statusLabel, statusType } from '@/utils/format'
-import type { Reservation, Order } from '@/types'
+import type { Reservation, Order, PointTransaction } from '@/types'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -169,6 +207,14 @@ const profile = ref<any>({})
 const memberInfo = ref<any>(null)
 const expandedOrderId = ref<number | null>(null)
 const orderDetails = ref<Record<number, any>>({})
+
+// 个人资料编辑（姓名/手机号；等级与积分只读）
+const profileForm = reactive({ name: '', mobileNumber: '' })
+const savingProfile = ref(false)
+
+// 积分明细
+const pointsHistory = ref<PointTransaction[]>([])
+const loadingPoints = ref(false)
 
 // 偏好管理
 const preferences = ref<string[]>([])
@@ -233,6 +279,76 @@ async function savePreferences() {
   }
 }
 
+function syncProfileForm() {
+  profileForm.name = profile.value?.name || ''
+  profileForm.mobileNumber = profile.value?.mobile_number || ''
+}
+
+async function saveProfile() {
+  if (!profileForm.name.trim()) {
+    ElMessage.warning('姓名不能为空')
+    return
+  }
+  if (!/^\d{8,}$/.test(profileForm.mobileNumber.replace(/\D/g, ''))) {
+    ElMessage.warning('手机号至少包含 8 位数字')
+    return
+  }
+  savingProfile.value = true
+  try {
+    const res = await api.put<any>('/users/me', {
+      name: profileForm.name.trim(),
+      mobileNumber: profileForm.mobileNumber.trim(),
+    })
+    profile.value = res
+    syncProfileForm()
+    // 同步认证状态与本地缓存，导航栏等处立即生效
+    if (auth.user) {
+      auth.user.name = res.name
+      auth.user.mobile_number = res.mobile_number
+      auth.user.mobileNumber = res.mobile_number
+      localStorage.setItem('neko-auth', JSON.stringify({ token: auth.token, user: auth.user }))
+    }
+    ElMessage.success('资料保存成功')
+  } catch (e) {
+    ElMessage.error((e as Error).message || '保存失败')
+  } finally {
+    savingProfile.value = false
+  }
+}
+
+const SOURCE_LABELS: Record<string, string> = {
+  reservation_finished: '预约完成奖励',
+  order_paid: '订单支付积分',
+  order_cancelled: '订单撤销扣回',
+}
+
+function sourceLabel(sourceType: string) {
+  return SOURCE_LABELS[sourceType] || sourceType
+}
+
+async function loadPointsHistory() {
+  loadingPoints.value = true
+  try {
+    pointsHistory.value = await api.get<PointTransaction[]>('/users/me/points/history')
+  } catch (e) {
+    console.error('加载积分明细失败', e)
+  } finally {
+    loadingPoints.value = false
+  }
+}
+
+/** 刷新资料 + 积分明细：完成预约/支付后可在此看到积分变化 */
+async function refreshPoints() {
+  await loadProfile()
+  await loadMemberInfo()
+  await loadPointsHistory()
+}
+
+// 切到积分明细页时自动刷新，保证看到最新的积分变化
+watch(activeTab, (tab) => {
+  if (tab === 'points') refreshPoints()
+})
+
 function handleLogout() { auth.logout(); router.push('/login') }
 
 function getLevelLabel(level: string) {
@@ -285,6 +401,8 @@ onMounted(async () => {
   await loadProfile()
   await loadMemberInfo()
   loadPreferences()
+  syncProfileForm()
+  await loadPointsHistory()
 })
 
 // 展开/收起订单详情
@@ -396,4 +514,8 @@ function getOrderStatusLabel(status: string) {
 .preset-label { font-size: 13px; color: #667085; margin-bottom: 8px; }
 .custom-pref { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
 .loading { text-align: center; color: #999; padding: 12px; font-size: 13px; }
+.points-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 14px; }
+.delta-plus { color: #67c23a; font-weight: 700; }
+.delta-minus { color: #f56c6c; font-weight: 700; }
+.source-id { color: #909399; font-size: 12px; }
 </style>

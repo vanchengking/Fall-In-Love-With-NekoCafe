@@ -20,7 +20,7 @@ public class SmsService {
     private final long ttlSeconds;
 
     public SmsService(StringRedisTemplate redis,
-                      @Value("${neko.sms.fixed-code:8888}") String fixedCode,
+                      @Value("${neko.sms.fixed-code:123456}") String fixedCode,
                       @Value("${neko.sms.ttl-seconds:300}") long ttlSeconds) {
         this.redis = redis;
         this.fixedCode = fixedCode;
