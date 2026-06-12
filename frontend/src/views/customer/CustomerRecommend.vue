@@ -165,17 +165,18 @@ async function onStoreChange(val: number) {
 
 async function loadRecommendations() {
   if (!storeId.value) {
-    router.push('/stores')
     return
   }
   loading.value = true
   try {
-    const prefs = auth.user?.preferences?.join(',') || ''
+    const prefs = Array.isArray(auth.user?.preferences) ? auth.user.preferences.join(',') : ''
+    console.log('请求推荐参数:', { userId: auth.user?.id, storeId: storeId.value, preferences: prefs })
     const result = await api.get<any>('/recommendations', {
       userId: auth.user?.id,
       storeId: storeId.value,
       preferences: prefs || undefined,
     })
+    console.log('推荐接口返回:', result)
     recommendations.value = {
       cat: result.cat ? [result.cat] : [],
       tables: result.tables || [],
@@ -183,6 +184,7 @@ async function loadRecommendations() {
     }
   } catch (err: any) {
     console.error('推荐加载失败', err)
+    ElMessage.error('推荐加载失败：' + (err.message || '未知错误'))
   } finally {
     loading.value = false
   }
