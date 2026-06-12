@@ -2,6 +2,7 @@ package com.nekocafe.service;
 
 import com.nekocafe.common.ApiException;
 import com.nekocafe.dto.ReservationRequest;
+import com.nekocafe.dto.ReservationRescheduleRequest;
 import com.nekocafe.entity.Reservation;
 import com.nekocafe.entity.ReservationEvent;
 import com.nekocafe.entity.User;
@@ -365,5 +366,39 @@ class ReservationServiceTest {
 
         assertEquals(101L, detail.get("id"));
         verify(reservationMapper, times(1)).insert(any(Reservation.class));
+    }
+
+    @Test
+    @DisplayName("顾客可改约本人 booked 预约：成功更新时段并写入事件")
+    void ownerCanRescheduleOwnReservation() {
+        Reservation current = reservation(1L, 9L, "booked");
+        current.setTableId(3L);
+        when(reservationMapper.selectForUpdate(1L)).thenReturn(current);
+        when(reservationMapper.findAvailableTableForUpdate(1L, 4, "2099-12-31", "19:00"))
+                .thenReturn(new HashMap<>(java.util.Map.of("id", 8L)));
+        when(reservationMapper.countActiveOnSlotExcludingReservation(1L, 8L, "2099-12-31", "19:00"))
+                .thenReturn(0);
+        when(reservationMapper.rescheduleReservation(any(Reservation.class))).thenReturn(1);
+        when(reservationMapper.getReservationDetail(1L)).thenReturn(new HashMap<>());
+
+        service.reschedule(1L, new ReservationRescheduleRequest(
+                1L, null, null, "2099-12-31", "19:00", 4, "改到晚一点"), new AuthUser(9L, "顾客", "138", "customer"));
+
+        verify(reservationMapper, times(1)).rescheduleReservation(any(Reservation.class));
+        verify(reservationEventMapper, times(1)).insert(any(ReservationEvent.class));
+    }
+
+    @Test
+    @DisplayName("顾客不能改约他人预约：抛 403")
+    void nonOwnerCannotReschedule() {
+        when(reservationMapper.selectForUpdate(1L)).thenReturn(reservation(1L, 9L, "booked"));
+
+        ApiException ex = assertThrows(ApiException.class,
+                () -> service.reschedule(1L, new ReservationRescheduleRequest(
+                        1L, null, null, "2099-12-31", "19:00", 2, null),
+                        new AuthUser(7L, "别人", "139", "customer")));
+        assertEquals(403, ex.getStatus());
+
+        verify(reservationMapper, never()).rescheduleReservation(any(Reservation.class));
     }
 }

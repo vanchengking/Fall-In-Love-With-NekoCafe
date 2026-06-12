@@ -59,7 +59,10 @@
                 <el-tag :type="statusType(r.status)" size="small">{{ r.status_label || statusLabel(r.status) }}</el-tag>
                 <span>{{ r.reservation_date }} {{ r.reservation_time }} · {{ r.party_size }}人 · {{ r.table_code || '待分配' }}</span>
               </div>
-              <el-button v-if="r.status === 'created' || r.status === 'booked'" type="danger" plain size="small" @click="cancelReservation(r)">取消预约</el-button>
+              <div v-if="r.status === 'created' || r.status === 'booked'" class="res-actions">
+                <el-button size="small" @click="openReschedule(r)">改约</el-button>
+                <el-button type="danger" plain size="small" @click="cancelReservation(r)">取消预约</el-button>
+              </div>
             </div>
             <el-empty v-if="!reservations.length" description="暂无预约" />
           </el-tab-pane>
@@ -189,11 +192,48 @@
         </el-tabs>
       </div>
     </div>
+
+    <el-dialog v-model="rescheduleVisible" title="改约" width="420px">
+      <el-form label-position="top">
+        <el-form-item label="日期">
+          <el-date-picker
+            v-model="rescheduleForm.reservationDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="时间">
+          <el-time-picker
+            v-model="rescheduleForm.reservationTime"
+            format="HH:mm"
+            value-format="HH:mm"
+            style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="人数">
+          <el-input-number
+            v-model="rescheduleForm.partySize"
+            :min="1"
+            :max="12"
+            style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input
+            v-model="rescheduleForm.note"
+            type="textarea"
+            :rows="3"
+            placeholder="如需重新安排桌位，可填写补充说明" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="rescheduleVisible = false">取消</el-button>
+        <el-button type="primary" :loading="rescheduling" @click="submitReschedule">确认改约</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, watch, onMounted, computed} from 'vue'
+import { reactive, ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
@@ -211,6 +251,17 @@ const profile = ref<any>({})
 const memberInfo = ref<any>(null)
 const expandedOrderId = ref<number | null>(null)
 const orderDetails = ref<Record<number, any>>({})
+const rescheduleVisible = ref(false)
+const rescheduling = ref(false)
+const rescheduleForm = reactive({
+  id: 0,
+  storeId: 0,
+  recommendedCatId: null as number | null,
+  reservationDate: '',
+  reservationTime: '',
+  partySize: 2,
+  note: '',
+})
 
 // 个人资料编辑（姓名/手机号；等级与积分只读）
 const profileForm = reactive({ name: '', mobileNumber: '' })
@@ -380,6 +431,45 @@ async function cancelReservation(r: Reservation) {
   }
 }
 
+function openReschedule(r: Reservation) {
+  rescheduleForm.id = r.id
+  rescheduleForm.storeId = r.store_id
+  rescheduleForm.recommendedCatId = r.recommended_cat_id ?? null
+  rescheduleForm.reservationDate = r.reservation_date
+  rescheduleForm.reservationTime = r.reservation_time
+  rescheduleForm.partySize = r.party_size
+  rescheduleForm.note = r.note || ''
+  rescheduleVisible.value = true
+}
+
+async function submitReschedule() {
+  if (!rescheduleForm.id || !rescheduleForm.reservationDate || !rescheduleForm.reservationTime) {
+    ElMessage.warning('请完整填写改约信息')
+    return
+  }
+  rescheduling.value = true
+  try {
+    const payload: Record<string, unknown> = {
+      storeId: rescheduleForm.storeId,
+      reservationDate: rescheduleForm.reservationDate,
+      reservationTime: rescheduleForm.reservationTime,
+      partySize: rescheduleForm.partySize,
+      note: rescheduleForm.note,
+    }
+    if (rescheduleForm.recommendedCatId) {
+      payload.recommendedCatId = rescheduleForm.recommendedCatId
+    }
+    const updated = await api.patch<Reservation>(`/reservations/${rescheduleForm.id}/reschedule`, payload)
+    reservations.value = reservations.value.map(item => item.id === updated.id ? updated : item)
+    rescheduleVisible.value = false
+    ElMessage.success('改约成功，原桌位时段已释放')
+  } catch (e) {
+    ElMessage.error((e as Error).message)
+  } finally {
+    rescheduling.value = false
+  }
+}
+
 async function loadProfile() {
   try {
     profile.value = await api.get<any>('/users/me')
@@ -503,6 +593,7 @@ function getOrderStatusLabel(status: string) {
 .profile-section { background: #fff; padding: 24px; border-radius: 12px; border: 1px solid #e8e5df; }
 .res-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f0eeea; }
 .res-left { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.res-actions { display: flex; gap: 8px; }
 .order-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f0eeea; }
 .order-meta { display: block; font-size: 13px; color: #667085; margin-top: 2px; }
 
