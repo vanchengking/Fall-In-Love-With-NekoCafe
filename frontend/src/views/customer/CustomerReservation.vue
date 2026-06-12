@@ -193,7 +193,7 @@ import { Cat, Armchair } from '@lucide/vue'
 import PreferenceChips from '@/components/PreferenceChips.vue'
 import { useCartStore } from '@/stores/cart'
 import { useAuthStore } from '@/stores/auth'
-import { api } from '@/utils/http'
+import { api, type ApiError } from '@/utils/http'
 import { tomorrow, cents, areaLabel, businessHours } from '@/utils/format'
 import { fallbackStores, fallbackTables, fallbackCats, fallbackMenuItems } from '@/utils/fallback'
 import type { Store, DiningTable, Cat as CatType, MenuItem, Reservation, Recommendations as RecType } from '@/types'
@@ -353,7 +353,14 @@ async function createReservation() {
     ElMessage.success(`预约成功！桌位：${created.table_code || '自动分配'}`)
     // 刚预约的桌位在当前时段已被占用，同步刷新布局与推荐（并由 prune 清空该选择）
     await Promise.all([refreshTables(), refreshRecommendations()])
-  } catch (e) { ElMessage.error((e as Error).message) }
+  } catch (e) {
+    const err = e as ApiError
+    ElMessage.error(err.message)
+    if (err.status === 409) {
+      // 并发冲突：该时段桌位已被他人抢占，刷新当前时段可用性，占用桌位立即置灰并清除失效选择
+      await Promise.all([refreshTables(), refreshRecommendations()])
+    }
+  }
   finally { loading.value = false }
 }
 

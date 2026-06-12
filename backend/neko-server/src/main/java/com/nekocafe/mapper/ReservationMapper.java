@@ -62,7 +62,19 @@ public interface ReservationMapper extends BaseMapper<Reservation> {
             """)
     Map<String, Object> getReservationDetail(@Param("id") Long id);
 
-    /** 手动选桌：锁定桌位行，校验门店、容量与 available 状态。 */
+    /**
+     * 手动选桌：仅按 id 锁定桌位行，门店一致/容量/available 状态由服务层逐项校验，
+     * 以便区分“不存在(404)/门店不符(400)/容量不足或停用(409)”，避免笼统失败或 500。
+     */
+    @Select("""
+            SELECT id, store_id, code, seats, area, cat_zone, status
+            FROM dining_tables
+            WHERE id = #{tableId}
+            FOR UPDATE
+            """)
+    Map<String, Object> lockTableById(@Param("tableId") Long tableId);
+
+    /** 改约选桌：锁定桌位行，校验门店、容量与 available 状态。 */
     @Select("""
             SELECT id, store_id, code, seats, area, cat_zone, status
             FROM dining_tables

@@ -1,8 +1,10 @@
 package com.nekocafe.service;
 
 import com.nekocafe.common.ApiException;
+import com.nekocafe.dto.ReservationRequest;
 import com.nekocafe.entity.Reservation;
 import com.nekocafe.entity.ReservationEvent;
+import com.nekocafe.entity.User;
 import com.nekocafe.mapper.ReservationEventMapper;
 import com.nekocafe.mapper.ReservationMapper;
 import com.nekocafe.mapper.UserMapper;
@@ -10,12 +12,17 @@ import com.nekocafe.security.AuthUser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DuplicateKeyException;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
@@ -27,6 +34,7 @@ import static org.mockito.Mockito.when;
 /**
  * ReservationService 状态流转单元测试：合法跳转写库+审计，非法跳转不写库不插事件，取消校验本人权限，
  * 完成预约发放积分（FR-MEMBER-002）。
+ * 创建路径（FR-TABLE-002）：手动选桌逐项校验（404/400/409），时段占用与唯一约束兜底统一 409。
  */
 class ReservationServiceTest {
 
@@ -164,5 +172,198 @@ class ReservationServiceTest {
 
         verify(reservationMapper, times(1)).update(isNull(), any());
         verify(reservationEventMapper, times(1)).insert(any(ReservationEvent.class));
+    }
+
+    // ------------------------------------------------------------------
+    // FR-TABLE-002 创建路径：手动选桌校验、时段占用预检、唯一约束兜底转 409
+    // ------------------------------------------------------------------
+
+    private static final String SLOT_TAKEN_MESSAGE = "该桌位在该时段已被预约，请重新选择桌位或时间";
+
+    private static ReservationRequest createRequest(Long tableId) {
+        String tomorrow = LocalDate.now(ZoneId.of("Asia/Shanghai")).plusDays(1).toString();
+        return new ReservationRequest("林小满", "13800000001", 1L, tableId, null,
+                tomorrow, "18:30", 2, null, null);
+    }
+
+    private static Map<String, Object> tableRow(long id, long storeId, int seats, String status) {
+        Map<String, Object> row = new HashMap<>();
+        row.put("id", id);
+        row.put("store_id", storeId);
+        row.put("code", "A01");
+        row.put("seats", seats);
+        row.put("status", status);
+        return row;
+    }
+
+    private void givenExistingCustomer() {
+        User user = new User();
+        user.setId(9L);
+        user.setRole("customer");
+        when(userMapper.selectOne(any())).thenReturn(user);
+    }
+
+    @Test
+    @DisplayName("手动选桌创建成功：锁桌→校验→预检→插入，并写 created/booked 两条审计事件")
+    void manualCreateHappyPath() {
+        givenExistingCustomer();
+        when(reservationMapper.lockTableById(5L)).thenReturn(tableRow(5L, 1L, 4, "available"));
+        when(reservationMapper.countActiveOnSlot(eq(5L), anyString(), anyString())).thenReturn(0);
+        when(reservationMapper.insert(any(Reservation.class))).thenAnswer(inv -> {
+            inv.getArgument(0, Reservation.class).setId(100L);
+            return 1;
+        });
+        when(reservationMapper.getReservationDetail(100L))
+                .thenReturn(new HashMap<>(Map.of("id", 100L, "status", "booked")));
+
+        Map<String, Object> detail = service.create(createRequest(5L));
+
+        assertEquals("booked", detail.get("status"));
+        verify(reservationMapper, times(1)).insert(any(Reservation.class));
+        verify(reservationEventMapper, times(2)).insert(any(ReservationEvent.class));
+    }
+
+    @Test
+    @DisplayName("并发兜底：插入命中 uq_reservations_active_slot 唯一约束转 409 且文案符合验收口径")
+    void duplicateKeyOnActiveSlotBecomes409() {
+        givenExistingCustomer();
+        when(reservationMapper.lockTableById(5L)).thenReturn(tableRow(5L, 1L, 4, "available"));
+        when(reservationMapper.countActiveOnSlot(eq(5L), anyString(), anyString())).thenReturn(0);
+        when(reservationMapper.insert(any(Reservation.class))).thenThrow(new DuplicateKeyException(
+                "Duplicate entry '5#2026-06-13#18:30:00' for key 'reservations.uq_reservations_active_slot'"));
+
+        ApiException ex = assertThrows(ApiException.class, () -> service.create(createRequest(5L)));
+
+        assertEquals(409, ex.getStatus());
+        assertEquals(SLOT_TAKEN_MESSAGE, ex.getMessage());
+        verify(reservationEventMapper, never()).insert(any(ReservationEvent.class));
+    }
+
+    @Test
+    @DisplayName("并发兜底：命中 uq_reservations_user_slot（同人同店同时段）也转 409，文案提示重复预约")
+    void duplicateKeyOnUserSlotBecomes409() {
+        givenExistingCustomer();
+        when(reservationMapper.lockTableById(5L)).thenReturn(tableRow(5L, 1L, 4, "available"));
+        when(reservationMapper.countActiveOnSlot(eq(5L), anyString(), anyString())).thenReturn(0);
+        when(reservationMapper.insert(any(Reservation.class))).thenThrow(new DuplicateKeyException(
+                "Duplicate entry '9#1#2026-06-13#18:30:00' for key 'reservations.uq_reservations_user_slot'"));
+
+        ApiException ex = assertThrows(ApiException.class, () -> service.create(createRequest(5L)));
+
+        assertEquals(409, ex.getStatus());
+        assertEquals("您在该门店该时段已有有效预约，请勿重复预约", ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("时段已被活跃预约占用：预检直接 409，不执行插入")
+    void occupiedSlotRejectedBeforeInsert() {
+        givenExistingCustomer();
+        when(reservationMapper.lockTableById(5L)).thenReturn(tableRow(5L, 1L, 4, "available"));
+        when(reservationMapper.countActiveOnSlot(eq(5L), anyString(), anyString())).thenReturn(1);
+
+        ApiException ex = assertThrows(ApiException.class, () -> service.create(createRequest(5L)));
+
+        assertEquals(409, ex.getStatus());
+        assertEquals(SLOT_TAKEN_MESSAGE, ex.getMessage());
+        verify(reservationMapper, never()).insert(any(Reservation.class));
+    }
+
+    @Test
+    @DisplayName("手动选桌：桌位不存在返回 404 而非 500")
+    void manualTableNotFoundIs404() {
+        givenExistingCustomer();
+        when(reservationMapper.lockTableById(404L)).thenReturn(null);
+
+        ApiException ex = assertThrows(ApiException.class, () -> service.create(createRequest(404L)));
+
+        assertEquals(404, ex.getStatus());
+        verify(reservationMapper, never()).insert(any(Reservation.class));
+    }
+
+    @Test
+    @DisplayName("手动选桌：桌位不属于请求门店返回 400")
+    void manualTableStoreMismatchIs400() {
+        givenExistingCustomer();
+        when(reservationMapper.lockTableById(5L)).thenReturn(tableRow(5L, 2L, 4, "available"));
+
+        ApiException ex = assertThrows(ApiException.class, () -> service.create(createRequest(5L)));
+
+        assertEquals(400, ex.getStatus());
+        verify(reservationMapper, never()).insert(any(Reservation.class));
+    }
+
+    @Test
+    @DisplayName("手动选桌：已停用桌位返回 409 而非 500")
+    void manualTableDisabledIs409() {
+        givenExistingCustomer();
+        when(reservationMapper.lockTableById(5L)).thenReturn(tableRow(5L, 1L, 4, "disabled"));
+
+        ApiException ex = assertThrows(ApiException.class, () -> service.create(createRequest(5L)));
+
+        assertEquals(409, ex.getStatus());
+        verify(reservationMapper, never()).insert(any(Reservation.class));
+    }
+
+    @Test
+    @DisplayName("手动选桌：容量不足返回 409")
+    void manualTableTooSmallIs409() {
+        givenExistingCustomer();
+        when(reservationMapper.lockTableById(5L)).thenReturn(tableRow(5L, 1L, 1, "available"));
+
+        ApiException ex = assertThrows(ApiException.class, () -> service.create(createRequest(5L)));
+
+        assertEquals(409, ex.getStatus());
+        verify(reservationMapper, never()).insert(any(Reservation.class));
+    }
+
+    @Test
+    @DisplayName("自动分配：无满足条件的空闲桌位返回 409")
+    void autoAssignNoTableIs409() {
+        givenExistingCustomer();
+        when(reservationMapper.findAvailableTableForUpdate(eq(1L), eq(2), anyString(), anyString()))
+                .thenReturn(null);
+
+        ApiException ex = assertThrows(ApiException.class, () -> service.create(createRequest(null)));
+
+        assertEquals(409, ex.getStatus());
+        verify(reservationMapper, never()).insert(any(Reservation.class));
+    }
+
+    @Test
+    @DisplayName("参数非法（人数超限）返回 400，不触达任何数据库写入")
+    void invalidPartySizeIs400() {
+        ReservationRequest bad = new ReservationRequest("林小满", "13800000001", 1L, 5L, null,
+                LocalDate.now(ZoneId.of("Asia/Shanghai")).plusDays(1).toString(), "18:30", 99, null, null);
+
+        ApiException ex = assertThrows(ApiException.class, () -> service.create(bad));
+
+        assertEquals(400, ex.getStatus());
+        verify(reservationMapper, never()).insert(any(Reservation.class));
+        verify(userMapper, never()).insert(any(User.class));
+    }
+
+    @Test
+    @DisplayName("并发建档兜底：users 唯一约束命中后重读用户继续创建，而非 500")
+    void concurrentCustomerUpsertFallsBackToReselect() {
+        User winner = new User();
+        winner.setId(9L);
+        winner.setRole("customer");
+        // 第一次查询不存在 → 插入命中唯一约束 → 重读拿到对方已建档的用户
+        when(userMapper.selectOne(any())).thenReturn(null, winner);
+        when(userMapper.insert(any(User.class))).thenThrow(new DuplicateKeyException(
+                "Duplicate entry '13800000001' for key 'users.mobile_number'"));
+        when(reservationMapper.lockTableById(5L)).thenReturn(tableRow(5L, 1L, 4, "available"));
+        when(reservationMapper.countActiveOnSlot(eq(5L), anyString(), anyString())).thenReturn(0);
+        when(reservationMapper.insert(any(Reservation.class))).thenAnswer(inv -> {
+            inv.getArgument(0, Reservation.class).setId(101L);
+            return 1;
+        });
+        when(reservationMapper.getReservationDetail(101L))
+                .thenReturn(new HashMap<>(Map.of("id", 101L, "status", "booked")));
+
+        Map<String, Object> detail = service.create(createRequest(5L));
+
+        assertEquals(101L, detail.get("id"));
+        verify(reservationMapper, times(1)).insert(any(Reservation.class));
     }
 }

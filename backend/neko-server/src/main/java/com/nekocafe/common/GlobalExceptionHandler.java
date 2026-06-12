@@ -1,5 +1,6 @@
 package com.nekocafe.common;
 
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -36,6 +37,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Object> handleIllegalArgument(IllegalArgumentException ex) {
         return body(400, ex.getMessage());
+    }
+
+    /** 唯一约束冲突的最终兜底：业务层未转换时按并发冲突返回 409，而非 500。 */
+    @ExceptionHandler(DuplicateKeyException.class)
+    public ResponseEntity<Object> handleDuplicateKey(DuplicateKeyException ex) {
+        return body(HttpStatus.CONFLICT.value(), "请求与已有数据冲突，请刷新后重试");
     }
 
     @ExceptionHandler(Exception.class)

@@ -68,13 +68,12 @@ public class ReservationService {
 
         boolean manual = r.tableId() != null;
         Map<String, Object> table = manual
-                ? reservationMapper.findTableByIdForUpdate(r.tableId(), r.storeId(), r.partySize())
+                ? lockManualTable(r.tableId(), r.storeId(), r.partySize())
                 : reservationMapper.findAvailableTableForUpdate(r.storeId(), r.partySize(), r.reservationDate(), r.reservationTime());
 
         if (table == null) {
-            throw manual
-                    ? ApiException.conflict("所选桌位不可用（不存在/容量不足/已停用），请重新选择桌位")
-                    : ApiException.conflict("暂无满足该时段与人数的可用桌位，请调整时间或人数");
+            // 仅自动分配会走到这里（手动路径在 lockManualTable 内逐项抛出 404/400/409）
+            throw ApiException.conflict("暂无满足该时段与人数的可用桌位，请调整时间或人数");
         }
         Long tableId = Normalizer.toLong(table.get("id"));
         String tableCode = String.valueOf(table.get("code"));
@@ -97,8 +96,9 @@ public class ReservationService {
         try {
             reservationMapper.insert(reservation);
         } catch (DuplicateKeyException ex) {
-            // 命中 table-slot 或 user-store-slot 唯一约束（并发/重复预约），数据库兜底防重复
-            throw ApiException.conflict("该时段已被预约，请重新选择桌位或时间");
+            // 并发下两个事务可能同时通过上面的业务检查（一致性读快照早于对方提交），
+            // 最终由数据库唯一约束拒绝后到者，这里统一转换为 409
+            throw toSlotConflict(ex);
         }
 
         // 按 D-01 报告口径写两条审计事件：null -> created -> booked
@@ -260,6 +260,36 @@ public class ReservationService {
         return decorate(reservationMapper.getReservationDetail(current.getId()));
     }
 
+    /**
+     * 手动选桌：先按 id 锁定桌位行（串行化同桌位的并发创建），再逐项校验
+     * 门店一致、容量足够与基础状态 available，分别给出 404/400/409，绝不落入 500。
+     */
+    private Map<String, Object> lockManualTable(Long tableId, Long storeId, int partySize) {
+        Map<String, Object> table = reservationMapper.lockTableById(tableId);
+        if (table == null) {
+            throw ApiException.notFound("所选桌位不存在，请重新选择桌位");
+        }
+        if (!storeId.equals(Normalizer.toLong(table.get("store_id")))) {
+            throw ApiException.badRequest("所选桌位不属于该门店，请重新选择桌位");
+        }
+        if (!"available".equals(String.valueOf(table.get("status")))) {
+            throw ApiException.conflict("该桌位已停用，请选择其他桌位");
+        }
+        if (Normalizer.toLong(table.get("seats")) < partySize) {
+            throw ApiException.conflict("该桌位容量不足，请选择更大的桌位或减少人数");
+        }
+        return table;
+    }
+
+    /** 数据库唯一约束兜底命中时，按约束语义转换为对用户有意义的 409 文案。 */
+    private static ApiException toSlotConflict(DuplicateKeyException ex) {
+        String cause = String.valueOf(ex.getMostSpecificCause().getMessage());
+        if (cause.contains("uq_reservations_user_slot")) {
+            return ApiException.conflict("您在该门店该时段已有有效预约，请勿重复预约");
+        }
+        return ApiException.conflict("该桌位在该时段已被预约，请重新选择桌位或时间");
+    }
+
     /** 按目标状态给出与动作一致的中文备注。 */
     private static String defaultNote(ReservationStatus to) {
         return switch (to) {
@@ -303,8 +333,17 @@ public class ReservationService {
             created.setMemberLevel("silver");
             created.setPoints(10);
             created.setPreferences(new ArrayList<>(r.preferences()));
-            userMapper.insert(created);
-            return created;
+            try {
+                userMapper.insert(created);
+                return created;
+            } catch (DuplicateKeyException ex) {
+                // 并发下同一手机号同时建档：另一事务已抢先插入（users.mobile_number 唯一），
+                // 重读改走更新分支，避免整个预约请求落入 500
+                user = userMapper.selectOne(new QueryWrapper<User>().eq("mobile_number", r.mobileNumber()));
+                if (user == null) {
+                    throw ex;
+                }
+            }
         }
         user.setName(r.customerName());
         // 创建预约本身不增加积分；积分在预约完成（finished）或订单支付时经流水发放
