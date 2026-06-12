@@ -3,7 +3,13 @@
     <div class="detail-header">
       <el-button @click="$router.push('/stores')" :icon="ArrowLeft">返回</el-button>
       <h2 style="margin: 0 12px">{{ storeName }}</h2>
-      <el-button type="primary" style="margin-left: auto" @click="$router.push(`/reservation`)">预约此门店</el-button>
+      <el-button type="primary" style="margin-left: auto" @click="$router.push({ path: '/reservation', query: { storeId } })">预约此门店</el-button>
+    </div>
+    <div v-if="store" class="store-info-bar">
+      <span>{{ store.city }} · {{ store.address }}</span>
+      <span>电话：{{ store.phone }}</span>
+      <span>营业时间：{{ businessHours(store) }}</span>
+      <span v-if="store.table_count">{{ store.table_count }} 桌 · {{ store.total_seats }} 座</span>
     </div>
     <el-tabs>
       <el-tab-pane label="猫咪档案">
@@ -29,10 +35,11 @@
           <div v-for="table in tables" :key="table.id" class="table-card">
             <div class="table-status-dot" :class="tableStatusClass(table.status)"></div>
             <strong>{{ table.code }}</strong>
-            <span>{{ table.seats }} 人 · {{ table.area }}</span>
+            <span>容量 {{ table.seats }} 人 · {{ areaLabel(table.area) }}</span>
             <div class="table-tags">
-              <el-tag v-if="table.cat_zone" size="small" type="success">猫区</el-tag>
+              <el-tag v-if="table.cat_zone" size="small" type="success">猫咪互动区</el-tag>
               <el-tag size="small" :type="tableStatusTagType(table.status)">{{ tableStatusLabel(table.status) }}</el-tag>
+              <el-tag v-if="table.available_for_slot === false" size="small" type="warning">当前时段已约满</el-tag>
             </div>
           </div>
         </div>
@@ -74,14 +81,15 @@ import { useRoute } from 'vue-router'
 import { ArrowLeft } from '@lucide/vue'
 import { Cat } from '@lucide/vue'
 import { api } from '@/utils/http'
-import { cents } from '@/utils/format'
+import { cents, areaLabel, businessHours } from '@/utils/format'
 import { useAuthStore } from '@/stores/auth'
 import { fallbackTables, fallbackCats, fallbackMenuItems, fallbackStores } from '@/utils/fallback'
 import type { DiningTable, Cat as CatType, MenuItem, Store } from '@/types'
 
 const route = useRoute()
 const storeId = Number(route.params.id)
-const storeName = ref('')
+const store = ref<Store | null>(null)
+const storeName = computed(() => store.value?.name || `门店 #${storeId}`)
 const tables = ref<DiningTable[]>([])
 const cats = ref<CatType[]>([])
 const menuItems = ref<MenuItem[]>([])
@@ -97,10 +105,10 @@ onMounted(async () => {
       api.get<Store[]>('/stores'),
     ])
     tables.value = t; cats.value = c; menuItems.value = m
-    storeName.value = s.find(x => x.id === storeId)?.name || `门店 #${storeId}`
+    store.value = s.find(x => x.id === storeId) || null
   } catch {
     tables.value = fallbackTables; cats.value = fallbackCats; menuItems.value = fallbackMenuItems
-    storeName.value = fallbackStores.find(x => x.id === storeId)?.name || `门店 #${storeId}`
+    store.value = fallbackStores.find(x => x.id === storeId) || null
   }
 
   // 获取会员折扣率
@@ -153,7 +161,12 @@ function healthClass(status?: string): string {
 </script>
 
 <style scoped>
-.detail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; gap: 12px; flex-wrap: wrap; }
+.detail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 12px; flex-wrap: wrap; }
+.store-info-bar {
+  display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 20px;
+  padding: 12px 16px; background: #fff; border: 1px solid #e8e5df; border-radius: 12px;
+  color: #667085; font-size: 13px;
+}
 .store-info { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
 .store-info h2 { margin: 0; font-size: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 

@@ -8,6 +8,12 @@ export interface Store {
   total_seats?: number
   open_time?: string
   close_time?: string
+  business_hours_text?: string
+  latitude?: number | string
+  longitude?: number | string
+  photo_url?: string | null
+  equipment_desc?: string | null
+  area_detail?: string | null
 }
 
 export interface DiningTable {
@@ -19,6 +25,9 @@ export interface DiningTable {
   cat_zone: boolean
   status?: string
   available_for_slot?: boolean
+  photo_url?: string | null
+  area_detail?: string | null
+  device_note?: string | null
   score?: number
 }
 

@@ -1,7 +1,16 @@
 <template>
   <div>
     <h2 style="margin-bottom: 6px">预约桌位</h2>
-    <p style="color: #667085; margin-bottom: 20px">选择日期时段 → 在店内布局中点选桌位 → 填写信息 → 提交预约</p>
+    <p style="color: #667085; margin-bottom: 20px">选择门店与日期时段 → 在店内布局中点选桌位 → 填写信息 → 提交预约</p>
+
+    <!-- 门店选择（支持从门店详情"预约此门店"带入） -->
+    <div class="store-bar">
+      <span class="pref-label">预约门店：</span>
+      <el-select v-model="form.storeId" filterable style="width: 260px" @change="onStoreChange">
+        <el-option v-for="store in stores" :key="store.id" :label="`${store.city} · ${store.name}`" :value="store.id" />
+      </el-select>
+      <span v-if="currentStore" class="store-hint">{{ currentStore.address }} · {{ businessHours(currentStore) }}</span>
+    </div>
 
     <!-- 偏好标签 -->
     <div class="pref-bar">
@@ -25,27 +34,12 @@
           </div>
 
           <div class="floor-map">
-            <!-- 窗户区域 -->
-            <div class="zone zone-window">
-              <div class="zone-label">靠窗区</div>
+            <!-- 按区域分组渲染：靠窗区在前，其余区域（主厅/派对区/安静区）依次展示 -->
+            <div v-for="zone in zonedTables" :key="zone.area"
+              class="zone" :class="zone.area === 'window' ? 'zone-window' : 'zone-main'">
+              <div class="zone-label">{{ areaLabel(zone.area) }}</div>
               <div class="zone-tables">
-                <div v-for="table in windowTables" :key="table.id"
-                  class="table-seat" :class="tableClass(table)"
-                  @click="selectTable(table)">
-                  <div class="seat-icon">
-                    <component :is="table.cat_zone ? Cat : Armchair" :size="20" />
-                  </div>
-                  <div class="seat-code">{{ table.code }}</div>
-                  <div class="seat-capacity">{{ table.seats }}人</div>
-                </div>
-              </div>
-            </div>
-
-            <!-- 主区域 -->
-            <div class="zone zone-main">
-              <div class="zone-label">主厅</div>
-              <div class="zone-tables">
-                <div v-for="table in mainTables" :key="table.id"
+                <div v-for="table in zone.tables" :key="table.id"
                   class="table-seat" :class="tableClass(table)"
                   @click="selectTable(table)">
                   <div class="seat-icon">
@@ -60,7 +54,7 @@
 
           <div v-if="form.tableId" class="selected-table-info">
             已选桌位：<strong>{{ selectedTableObj?.code }}</strong>
-            （{{ selectedTableObj?.seats }}人 · {{ selectedTableObj?.area }}）
+            （{{ selectedTableObj?.seats }}人 · {{ areaLabel(selectedTableObj?.area) }}）
             <el-button text type="primary" size="small" @click="form.tableId = ''">取消选择</el-button>
           </div>
         </div>
@@ -121,7 +115,7 @@
               class="rec-table-card" :class="{ selected: form.tableId === table.id }"
               @click="form.tableId = form.tableId === table.id ? '' : table.id">
               <div class="rec-table-code">{{ table.code }}</div>
-              <div class="rec-table-info">{{ table.seats }}人 · {{ table.area }}</div>
+              <div class="rec-table-info">{{ table.seats }}人 · {{ areaLabel(table.area) }}</div>
               <el-tag v-if="table.cat_zone" size="small" type="success">猫区</el-tag>
             </div>
           </div>
@@ -191,19 +185,22 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Cat, Armchair } from '@lucide/vue'
 import PreferenceChips from '@/components/PreferenceChips.vue'
 import { useCartStore } from '@/stores/cart'
 import { useAuthStore } from '@/stores/auth'
 import { api } from '@/utils/http'
-import { tomorrow, cents } from '@/utils/format'
-import { fallbackTables, fallbackCats, fallbackMenuItems } from '@/utils/fallback'
-import type { DiningTable, Cat as CatType, MenuItem, Reservation, Recommendations as RecType } from '@/types'
+import { tomorrow, cents, areaLabel, businessHours } from '@/utils/format'
+import { fallbackStores, fallbackTables, fallbackCats, fallbackMenuItems } from '@/utils/fallback'
+import type { Store, DiningTable, Cat as CatType, MenuItem, Reservation, Recommendations as RecType } from '@/types'
 
+const route = useRoute()
 const cart = useCartStore()
 const auth = useAuthStore()
 const loading = ref(false)
+const stores = ref<Store[]>([])
 const tables = ref<DiningTable[]>([])
 const cats = ref<CatType[]>([])
 const menuItems = ref<MenuItem[]>([])
@@ -214,7 +211,8 @@ const preferenceOptions = ['quiet', 'window', 'sweet', 'coffee', 'photo', 'healt
 const form = reactive({
   customerName: auth.user?.name || '',
   mobileNumber: auth.user?.mobileNumber || auth.user?.mobile_number || '',
-  storeId: 1,
+  // 从门店详情"预约此门店"或分享链接进入时带 ?storeId=，否则默认 1 号店
+  storeId: Number(route.query.storeId) || 1,
   reservationDate: tomorrow(), reservationTime: '18:30',
   partySize: 2, tableId: '' as string | number,
   recommendedCatId: '' as string | number,
@@ -222,8 +220,24 @@ const form = reactive({
   note: '',
 })
 
-const windowTables = computed(() => tables.value.filter(t => t.area === 'window'))
-const mainTables = computed(() => tables.value.filter(t => t.area !== 'window'))
+const currentStore = computed(() => stores.value.find(s => s.id === form.storeId))
+const AREA_ORDER = ['window', 'main', 'party', 'quiet']
+/** 店内布局按区域分组：靠窗区在前，其余按 main/party/quiet 顺序 */
+const zonedTables = computed(() => {
+  const groups: { area: string; tables: DiningTable[] }[] = []
+  for (const table of tables.value) {
+    let group = groups.find(g => g.area === table.area)
+    if (!group) {
+      group = { area: table.area, tables: [] }
+      groups.push(group)
+    }
+    group.tables.push(table)
+  }
+  return groups.sort((a, b) => {
+    const ia = AREA_ORDER.indexOf(a.area), ib = AREA_ORDER.indexOf(b.area)
+    return (ia === -1 ? AREA_ORDER.length : ia) - (ib === -1 ? AREA_ORDER.length : ib)
+  })
+})
 const selectedTableObj = computed(() => tables.value.find(t => t.id === form.tableId))
 
 // 购物车价格计算（含会员折扣）
@@ -257,6 +271,28 @@ async function refreshTables() {
       time: form.reservationTime, partySize: form.partySize,
     })
   } catch { tables.value = fallbackTables }
+}
+
+/** 加载当前门店的桌位/猫咪/菜单 */
+async function loadStoreData() {
+  try {
+    const [t, c, m] = await Promise.all([
+      api.get<DiningTable[]>('/tables', { storeId: form.storeId }),
+      api.get<CatType[]>('/cats', { storeId: form.storeId }),
+      api.get<MenuItem[]>('/menu-items', { storeId: form.storeId }),
+    ])
+    tables.value = t; cats.value = c; menuItems.value = m; cart.menuItems = m
+  } catch {
+    tables.value = fallbackTables; cats.value = fallbackCats; menuItems.value = fallbackMenuItems
+  }
+}
+
+/** 切换门店：清空已选桌位/推荐猫咪，重载该店数据与推荐 */
+async function onStoreChange() {
+  form.tableId = ''
+  form.recommendedCatId = ''
+  await loadStoreData()
+  await refreshRecommendations()
 }
 
 async function refreshRecommendations() {
@@ -305,16 +341,13 @@ function getDiscountedPrice(priceCents: number): number {
 }
 
 onMounted(async () => {
-  try {
-    const [t, c, m] = await Promise.all([
-      api.get<DiningTable[]>('/tables', { storeId: form.storeId }),
-      api.get<CatType[]>('/cats', { storeId: form.storeId }),
-      api.get<MenuItem[]>('/menu-items', { storeId: form.storeId }),
-    ])
-    tables.value = t; cats.value = c; menuItems.value = m; cart.menuItems = m
-  } catch {
-    tables.value = fallbackTables; cats.value = fallbackCats; menuItems.value = fallbackMenuItems
+  try { stores.value = await api.get<Store[]>('/stores') }
+  catch { stores.value = fallbackStores }
+  // URL 带入的门店不存在时回退到第一家，避免选择器显示悬空 ID
+  if (stores.value.length > 0 && !stores.value.some(s => s.id === form.storeId)) {
+    form.storeId = stores.value[0].id
   }
+  await loadStoreData()
 
   // 获取会员折扣率
   if (auth.isAuthenticated) {
@@ -331,6 +364,8 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.store-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.store-hint { font-size: 13px; color: #98a2b3; }
 .pref-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
 .pref-label { font-size: 14px; color: #667085; flex-shrink: 0; }
 .res-layout { display: grid; grid-template-columns: 1fr 380px; gap: 20px; }

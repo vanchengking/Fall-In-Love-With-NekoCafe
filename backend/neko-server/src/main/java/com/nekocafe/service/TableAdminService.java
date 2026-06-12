@@ -13,9 +13,11 @@ import java.util.Map;
 public class TableAdminService {
 
     private final TableMapper tableMapper;
+    private final CatalogService catalogService;
 
-    public TableAdminService(TableMapper tableMapper) {
+    public TableAdminService(TableMapper tableMapper, CatalogService catalogService) {
         this.tableMapper = tableMapper;
+        this.catalogService = catalogService;
     }
 
     public List<Map<String, Object>> listTables(Long storeId,
@@ -48,6 +50,8 @@ public class TableAdminService {
     public Map<String, Object> createTable(Map<String, Object> body) {
         Map<String, Object> table = normalizeTable(body);
         tableMapper.insertTable(table);
+        // 桌位增删改会改变门店列表的 table_count/total_seats 统计，需要同步失效缓存
+        catalogService.evictStoresCache();
         return getTableDetail(toLong(table.get("id")), null, null);
     }
 
@@ -58,6 +62,7 @@ public class TableAdminService {
         if (tableMapper.updateTable(table) == 0) {
             throw ApiException.notFound("table not found");
         }
+        catalogService.evictStoresCache();
         return getTableDetail(id, null, null);
     }
 
@@ -66,6 +71,7 @@ public class TableAdminService {
         if (tableMapper.deleteTable(id) == 0) {
             throw ApiException.notFound("table not found");
         }
+        catalogService.evictStoresCache();
         return Map.of("deleted", true, "table", existing);
     }
 

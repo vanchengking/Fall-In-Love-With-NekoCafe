@@ -7,10 +7,20 @@
 ### 0. 健康检查（期望 200 {"ok":true}）
 GET {{base}}/healthz
 
-### 1. 门店 / 桌位（只读）
+### 1. 门店 / 桌位（只读，FR-STORE-001 / FR-STORE-002）
+### 1a. 门店列表——期望 data 共 38 家门店、覆盖 12 个城市（北京/上海/广州/深圳/杭州/成都/南京/武汉/西安/重庆/苏州/天津），
+###     每条含 city、address、phone、open_time、close_time、business_hours_text、table_count、total_seats
 GET {{base}}/api/stores
-###
+
+### 1b. 桌位列表——期望返回 1 号店桌位，每条含 store_id、code、seats、area、cat_zone、status、available_for_slot；
+###     area 为 canonical 值（window/main/party/quiet）
 GET {{base}}/api/tables?storeId=1&date=2026-09-01&time=19:00&partySize=2
+
+### 1c. 桌位容量过滤——partySize=5 时期望仅返回 seats>=5 的桌位（1 号店应只剩 C01 6 人桌）
+GET {{base}}/api/tables?storeId=1&partySize=5
+
+### 1d. 新增门店抽查——38 号店（天津鼓楼店）应有 4 张桌位且至少 1 张 cat_zone=true
+GET {{base}}/api/tables?storeId=38
 
 ### 2. 推荐——四维评分 + reasons（期望 cat/tables/menuItems 每项都带 score 与 reasons）
 GET {{base}}/api/recommendations?storeId=1&preferences=quiet,window

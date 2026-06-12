@@ -14,38 +14,8 @@ import java.util.Map;
 @Mapper
 public interface CatalogMapper {
 
-    @Select("""
-            SELECT s.id, s.name, s.city, s.address, s.phone,
-                   DATE_FORMAT(s.open_time, '%H:%i') AS open_time,
-                   DATE_FORMAT(s.close_time, '%H:%i') AS close_time,
-                   s.latitude, s.longitude,
-                   COUNT(t.id) AS table_count,
-                   COALESCE(SUM(t.seats), 0) AS total_seats
-            FROM stores s
-            LEFT JOIN dining_tables t ON t.store_id = s.id
-            GROUP BY s.id, s.name, s.city, s.address, s.phone, s.open_time, s.close_time, s.latitude, s.longitude
-            ORDER BY s.id
-            """)
-    List<Map<String, Object>> listStores();
-
-    @Select("""
-            SELECT t.id, t.store_id, t.code, t.seats, t.area, t.cat_zone, t.status,
-                   NOT EXISTS (
-                     SELECT 1 FROM reservations r
-                     WHERE r.table_id = t.id
-                       AND (#{date} IS NULL OR r.reservation_date = #{date})
-                       AND (#{time} IS NULL OR r.reservation_time = #{time})
-                       AND r.status IN ('created', 'booked', 'seated', 'dining')
-                   ) AS available_for_slot
-            FROM dining_tables t
-            WHERE (#{storeId} IS NULL OR t.store_id = #{storeId})
-              AND (#{partySize} IS NULL OR t.seats >= #{partySize})
-            ORDER BY t.store_id, t.seats, t.code
-            """)
-    List<Map<String, Object>> listTables(@Param("storeId") Long storeId,
-                                         @Param("date") String date,
-                                         @Param("time") String time,
-                                         @Param("partySize") Integer partySize);
+    // 门店/桌位查询统一走 StoreMapper/TableMapper（含 V005 扩展字段），此处不再保留旧版查询，
+    // 避免公开列表与管理列表出现两套字段契约。
 
     @Select("""
             SELECT id, store_id, name, category, price_cents, tags, status, photo_url

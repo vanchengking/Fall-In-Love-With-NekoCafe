@@ -63,6 +63,15 @@ public class CatalogService {
         return stores;
     }
 
+    /** 门店/桌位管理端变更后调用：清除门店列表缓存，避免 TTL 内读到旧的门店信息或桌位统计。 */
+    public void evictStoresCache() {
+        try {
+            redis.delete(STORES_CACHE_KEY);
+        } catch (Exception ignored) {
+            // 缓存删除失败时等待 TTL 自然过期
+        }
+    }
+
     public List<Map<String, Object>> listTables(Long storeId, String date, String time, Integer partySize) {
         List<Map<String, Object>> rows = tableMapper.listTables(storeId,
                 emptyToNull(date), emptyToNull(time), partySize);

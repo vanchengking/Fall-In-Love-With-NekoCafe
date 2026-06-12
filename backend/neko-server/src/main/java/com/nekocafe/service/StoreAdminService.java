@@ -13,9 +13,11 @@ import java.util.Map;
 public class StoreAdminService {
 
     private final StoreMapper storeMapper;
+    private final CatalogService catalogService;
 
-    public StoreAdminService(StoreMapper storeMapper) {
+    public StoreAdminService(StoreMapper storeMapper, CatalogService catalogService) {
         this.storeMapper = storeMapper;
+        this.catalogService = catalogService;
     }
 
     public List<Map<String, Object>> listStores() {
@@ -33,6 +35,7 @@ public class StoreAdminService {
     public Map<String, Object> createStore(Map<String, Object> body) {
         Map<String, Object> store = normalizeStore(body);
         storeMapper.insertStore(store);
+        catalogService.evictStoresCache();
         return getStoreDetail(toLong(store.get("id")));
     }
 
@@ -43,6 +46,7 @@ public class StoreAdminService {
         if (storeMapper.updateStore(store) == 0) {
             throw ApiException.notFound("store not found");
         }
+        catalogService.evictStoresCache();
         return getStoreDetail(id);
     }
 
@@ -51,6 +55,7 @@ public class StoreAdminService {
         if (storeMapper.deleteStore(id) == 0) {
             throw ApiException.notFound("store not found");
         }
+        catalogService.evictStoresCache();
         return Map.of("deleted", true, "store", existing);
     }
 

@@ -204,7 +204,7 @@ backend/neko-server/src/main/java/com/nekocafe/
 | 模块 | 前端页面 | 功能说明 |
 |------|----------|----------|
 | M1 用户与会员 | Login.vue, CustomerProfile.vue | SMS 登录、JWT 持久化、资料维护（姓名/手机号/偏好）、会员等级/积分展示、积分明细 |
-| M2 门店与桌位 | CustomerStores.vue, CustomerStoreDetail.vue, StaffTables.vue | 门店列表、猫咪/桌位/菜单详情、可视化选桌、排队显示 |
+| M2 门店与桌位 | CustomerStores.vue, CustomerStoreDetail.vue, StaffTables.vue | 门店列表（38 家 / 12 城市，城市筛选 + 搜索 + 营业时间）、门店详情（地址/电话/营业时间 + 猫咪/桌位/菜单）、可视化选桌（按区域分组）、排队显示 |
 | M3 预约与点单 | CustomerReservation.vue, CustomerOrder.vue, CustomerPayment.vue | 可视化选桌+偏好标签+推荐、购物车、支付沙箱 |
 | M4 订单与履约 | CustomerProfile.vue, StaffOrders.vue | 订单列表、取消预约、状态机（created→booked→seated→dining→finished） |
 | M5 店员后台 | StaffToday.vue, StaffReservations.vue, StaffOrders.vue | 今日看板（10s轮询）、预约/订单管理、异常告警 |
@@ -227,9 +227,11 @@ backend/neko-server/src/main/java/com/nekocafe/
   - `db/migrations/V003__reservation_backend_completion.sql`：预约后台补全——新增推荐日志表 `recommendation_logs`、`reservation_events` 状态索引，并幂等兜底唯一约束（兼容已执行过 V001/V002 的库）。
   - `db/migrations/V004__m6_dashboard.sql` / `V005__m2_store_table.sql` / `V006__m1_review_module.sql`：看板、门店桌位管理、评价模块扩展。
   - `db/migrations/V007__m1_member_points.sql`：会员积分流水表 `point_transactions`——记录每次积分变更的 delta 与变动后余额，`(source_type, source_id)` 唯一约束防重复发放（预约完成 +10 分、订单支付/撤销均落流水）。
+  - `db/migrations/V008__m2_store_table_seed.sql`：M2 门店/桌位种子补齐（FR-STORE-001/002）——按 T-01 选题口径补齐 12 城市 38 家门店（含地址/电话/营业时间/营业时间文本/坐标/设施与分区描述），每店 4 张桌位（含猫咪互动区桌，area 维持 window/main/party/quiet）；幂等可重复执行，仅补全不覆盖 1、2 号门店既有数据。
 - 演示数据：`db/seed_data.sql`（非 Flyway 管理，按需手动导入）——审计事件遵循 `booked→seated→dining→finished` 状态机口径。
+- 种子验收：`db/verify_m2_seed.sql`——人工核对 38 门店/12 城市/字段完整/桌位分布的查询脚本。
 - MySQL 字符集：`utf8mb4`（docker-compose 中配置 `--character-set-server=utf8mb4`）
-- 种子数据包含：6个用户、2个门店、4只猫、5道菜品、17条预约、11个订单、12条评价、12条健康记录
+- 种子数据包含：6个用户、38个门店（12 城市）、152张桌位（560 座）、4只猫、5道菜品、17条预约、11个订单、12条评价、12条健康记录
 
 ## 本地开发
 
