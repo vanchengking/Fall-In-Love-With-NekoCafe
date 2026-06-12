@@ -5,6 +5,7 @@ import com.nekocafe.entity.Reservation;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 import java.util.Map;
@@ -108,6 +109,32 @@ public interface ReservationMapper extends BaseMapper<Reservation> {
     int countActiveOnSlot(@Param("tableId") Long tableId,
                           @Param("date") String date,
                           @Param("time") String time);
+
+    @Select("""
+            SELECT COUNT(*) FROM reservations
+            WHERE id <> #{reservationId}
+              AND table_id = #{tableId}
+              AND reservation_date = #{date}
+              AND reservation_time = #{time}
+              AND status IN ('created', 'booked', 'seated', 'dining')
+            """)
+    int countActiveOnSlotExcludingReservation(@Param("reservationId") Long reservationId,
+                                              @Param("tableId") Long tableId,
+                                              @Param("date") String date,
+                                              @Param("time") String time);
+
+    @Update("""
+            UPDATE reservations
+            SET store_id = #{storeId},
+                table_id = #{tableId},
+                recommended_cat_id = #{recommendedCatId},
+                reservation_date = #{reservationDate},
+                reservation_time = #{reservationTime},
+                party_size = #{partySize},
+                note = #{note}
+            WHERE id = #{id}
+            """)
+    int rescheduleReservation(Reservation reservation);
 
     /** 预约状态变更事件（含 created_at），按时间正序返回，供事件审计接口使用。 */
     @Select("""

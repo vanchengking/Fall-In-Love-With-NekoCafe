@@ -8,6 +8,7 @@ import com.nekocafe.domain.ReservationStateMachine;
 import com.nekocafe.domain.ReservationStatus;
 import com.nekocafe.domain.ReservationValidator;
 import com.nekocafe.dto.ReservationRequest;
+import com.nekocafe.dto.ReservationRescheduleRequest;
 import com.nekocafe.entity.Reservation;
 import com.nekocafe.entity.ReservationEvent;
 import com.nekocafe.entity.User;
@@ -146,6 +147,69 @@ public class ReservationService {
 
         String note = (owner && !staff) ? "顾客取消预约" : "取消预约";
         return applyTransition(current, ReservationStatus.CANCELLED, actor, note);
+    }
+
+    @Transactional
+    public Map<String, Object> reschedule(Long id, ReservationRescheduleRequest request, AuthUser actor) {
+        Reservation current = reservationMapper.selectForUpdate(id);
+        if (current == null) {
+            throw ApiException.notFound("reservation " + id + " not found");
+        }
+
+        boolean staff = isStaff(actor);
+        boolean owner = actor != null && actor.id() != null && actor.id().equals(current.getUserId());
+        if (!staff && !owner) {
+            throw ApiException.forbidden("cannot reschedule this reservation");
+        }
+
+        ReservationStatus from = ReservationStatus.from(current.getStatus())
+                .orElseThrow(() -> ApiException.badRequest("invalid current reservation status: " + current.getStatus()));
+        if (from != ReservationStatus.CREATED && from != ReservationStatus.BOOKED) {
+            throw ApiException.badRequest("only created or booked reservations can be rescheduled");
+        }
+
+        ReservationValidator.RescheduleNormalized r =
+                ReservationValidator.validateReschedule(request, LocalDateTime.now(ZONE));
+
+        boolean manual = r.tableId() != null;
+        Map<String, Object> table = manual
+                ? reservationMapper.findTableByIdForUpdate(r.tableId(), r.storeId(), r.partySize())
+                : reservationMapper.findAvailableTableForUpdate(r.storeId(), r.partySize(), r.reservationDate(), r.reservationTime());
+
+        if (table == null) {
+            throw manual
+                    ? ApiException.conflict("selected table is unavailable")
+                    : ApiException.conflict("no available table for the requested slot");
+        }
+        Long tableId = Normalizer.toLong(table.get("id"));
+
+        if (reservationMapper.countActiveOnSlotExcludingReservation(id, tableId, r.reservationDate(), r.reservationTime()) > 0) {
+            throw ApiException.conflict("the requested slot is already occupied");
+        }
+
+        current.setStoreId(r.storeId());
+        current.setTableId(tableId);
+        current.setRecommendedCatId(r.recommendedCatId());
+        current.setReservationDate(r.reservationDate());
+        current.setReservationTime(r.reservationTime());
+        current.setPartySize(r.partySize());
+        current.setNote(r.note());
+
+        try {
+            if (reservationMapper.rescheduleReservation(current) == 0) {
+                throw ApiException.notFound("reservation " + id + " not found");
+            }
+        } catch (DuplicateKeyException ex) {
+            throw ApiException.conflict("the requested slot is already occupied");
+        }
+
+        reservationEventMapper.insert(new ReservationEvent(
+                current.getId(), from.value(), from.value(),
+                actor == null ? null : actor.role(),
+                actor == null ? null : actor.id(),
+                "reservation rescheduled"));
+
+        return decorate(reservationMapper.getReservationDetail(current.getId()));
     }
 
     public List<Map<String, Object>> events(Long reservationId) {

@@ -2,6 +2,7 @@ package com.nekocafe.domain;
 
 import com.nekocafe.common.ApiException;
 import com.nekocafe.dto.ReservationRequest;
+import com.nekocafe.dto.ReservationRescheduleRequest;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -34,6 +35,16 @@ public final class ReservationValidator {
             int partySize,
             String note,
             List<String> preferences) {
+    }
+
+    public record RescheduleNormalized(
+            Long storeId,
+            Long tableId,
+            Long recommendedCatId,
+            String reservationDate,
+            String reservationTime,
+            int partySize,
+            String note) {
     }
 
     public static String normalizeMobile(String value) {
@@ -107,6 +118,56 @@ public final class ReservationValidator {
                 partySize,
                 req.note() == null ? null : req.note().trim(),
                 prefs);
+    }
+
+    public static RescheduleNormalized validateReschedule(ReservationRescheduleRequest req, LocalDateTime now) {
+        if (req == null) {
+            throw ApiException.badRequest("request body is required");
+        }
+        require(req.storeId() != null, "storeId");
+        requireText(req.reservationDate(), "reservationDate");
+        requireText(req.reservationTime(), "reservationTime");
+        require(req.partySize() != null, "partySize");
+
+        int partySize = req.partySize();
+        if (partySize <= 0 || partySize > 12) {
+            throw ApiException.badRequest("partySize must be an integer between 1 and 12");
+        }
+
+        if (!DATE.matcher(req.reservationDate()).matches()) {
+            throw ApiException.badRequest("reservationDate must use YYYY-MM-DD");
+        }
+        if (!TIME.matcher(req.reservationTime()).matches()) {
+            throw ApiException.badRequest("reservationTime must use HH:mm");
+        }
+
+        LocalDate date;
+        LocalTime time;
+        try {
+            date = LocalDate.parse(req.reservationDate());
+            String[] hm = req.reservationTime().split(":");
+            time = LocalTime.of(Integer.parseInt(hm[0]), Integer.parseInt(hm[1]));
+        } catch (Exception ex) {
+            throw ApiException.badRequest("reservation date/time is invalid");
+        }
+
+        if (LocalDateTime.of(date, time).isBefore(now)) {
+            throw ApiException.badRequest("reservation must be in the future");
+        }
+
+        int minutes = time.getHour() * 60 + time.getMinute();
+        if (minutes < OPENS_AT || minutes > LAST_AT) {
+            throw ApiException.badRequest("reservationTime must be between 10:30 and 21:30");
+        }
+
+        return new RescheduleNormalized(
+                req.storeId(),
+                req.tableId(),
+                req.recommendedCatId(),
+                req.reservationDate(),
+                req.reservationTime(),
+                partySize,
+                req.note() == null ? null : req.note().trim());
     }
 
     private static void require(boolean ok, String field) {
