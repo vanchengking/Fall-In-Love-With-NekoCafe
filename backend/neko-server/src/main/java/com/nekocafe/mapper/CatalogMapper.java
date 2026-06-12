@@ -21,6 +21,7 @@ public interface CatalogMapper {
             SELECT id, store_id, name, category, price_cents, tags, status, photo_url
             FROM menu_items
             WHERE (#{storeId} IS NULL OR store_id = #{storeId})
+              AND status = 'available'
             ORDER BY category, price_cents
             """)
     List<Map<String, Object>> listMenuItems(@Param("storeId") Long storeId);
