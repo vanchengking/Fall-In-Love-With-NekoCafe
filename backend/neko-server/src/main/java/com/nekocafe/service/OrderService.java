@@ -24,6 +24,11 @@ import java.util.Map;
  */
 @Service
 public class OrderService {
+    private static final String ORDER_STATUS_PAID = "paid";
+    private static final String ORDER_STATUS_CANCELLED = "cancelled";
+    private static final String PAYMENT_STATUS_PAID = "paid";
+    private static final String PAYMENT_STATUS_REFUNDED = "refunded";
+    private static final String LEGACY_PAYMENT_STATUS_SANDBOX_PAID = "sandbox_paid";
 
     private final OrderMapper orderMapper;
     private final OrderItemMapper orderItemMapper;
@@ -97,8 +102,8 @@ public class OrderService {
         order.setReservationId(request.reservationId());
         order.setUserId(userId);
         order.setStoreId(storeId);
-        order.setStatus("paid");
-        order.setPaymentStatus("sandbox_paid");
+        order.setStatus(ORDER_STATUS_PAID);
+        order.setPaymentStatus(PAYMENT_STATUS_PAID);
         order.setOriginalTotalCents((int) total);  // 保存原价
         order.setDiscountRate(discountRate);         // 保存折扣率
         order.setTotalCents((int) discountedTotal); // 保存折扣后价格
@@ -133,7 +138,7 @@ public class OrderService {
         out.put("original_total_cents", order.getOriginalTotalCents());  // 原价
         out.put("discount_rate", order.getDiscountRate());                // 折扣率
         out.put("total_cents", order.getTotalCents());                  // 折后价
-        out.put("payment", Map.of("txn_ref", txnRef, "channel", "sandbox", "status", "paid"));
+        out.put("payment", Map.of("txn_ref", txnRef, "channel", "sandbox", "status", PAYMENT_STATUS_PAID));
         return out;
     }
 
@@ -146,8 +151,11 @@ public class OrderService {
         if (order == null) {
             throw ApiException.notFound("订单不存在");
         }
-        if (!"paid".equals(order.getStatus())) {
+        if (!ORDER_STATUS_PAID.equals(order.getStatus())) {
             throw ApiException.badRequest("只能撤销已支付的订单");
+        }
+        if (!isPaidPaymentStatus(order.getPaymentStatus())) {
+            throw ApiException.badRequest("当前订单未处于已支付状态，无法触发退款");
         }
 
         // 先扣回支付时发放的积分（如果失败，事务回滚，订单状态不会更新）
@@ -160,13 +168,19 @@ public class OrderService {
         }
 
         // 积分返还成功后，再更新订单状态
-        order.setStatus("cancelled");
+        order.setStatus(ORDER_STATUS_CANCELLED);
+        order.setPaymentStatus(PAYMENT_STATUS_REFUNDED);
         orderMapper.updateById(order);
+        paymentTransactionMapper.insert(new PaymentTransaction(
+                order.getId(), order.getReservationId(), order.getTotalCents(),
+                "sandbox", PAYMENT_STATUS_REFUNDED, "SBX-REFUND-" + order.getId()));
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("id", order.getId());
         out.put("status", order.getStatus());
+        out.put("payment_status", order.getPaymentStatus());
         out.put("total_cents", order.getTotalCents());
+        out.put("refund", Map.of("channel", "sandbox", "status", PAYMENT_STATUS_REFUNDED));
         return out;
     }
 
@@ -178,5 +192,10 @@ public class OrderService {
         List<Map<String, Object>> items = catalogMapper.getOrderItems(orderId);
         order.put("items", items);
         return order;
+    }
+
+    private static boolean isPaidPaymentStatus(String paymentStatus) {
+        return PAYMENT_STATUS_PAID.equals(paymentStatus)
+                || LEGACY_PAYMENT_STATUS_SANDBOX_PAID.equals(paymentStatus);
     }
 }

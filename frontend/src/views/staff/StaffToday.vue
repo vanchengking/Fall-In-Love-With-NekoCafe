@@ -12,6 +12,12 @@
       <div class="stat-card"><span>已完成</span><strong>{{ stats.finished }}</strong></div>
       <div class="stat-card"><span>待处理</span><strong>{{ stats.pending }}</strong></div>
     </div>
+    <div class="today-sections">
+      <section class="panel">
+        <div class="panel-header">
+          <h3>今日预约</h3>
+          <span>{{ todayReservations.length }} 条</span>
+        </div>
     <div class="filter-bar">
       <el-radio-group v-model="statusFilter" @change="loadReservations">
         <el-radio-button value="">全部</el-radio-button>
@@ -25,7 +31,7 @@
       </el-radio-group>
     </div>
     <div class="res-list">
-      <div v-for="r in reservations" :key="r.id" class="res-card">
+      <div v-for="r in todayReservations" :key="r.id" class="res-card">
         <div class="res-info">
           <el-tag :type="statusType(r.status)" size="small">{{ r.status_label || statusLabel(r.status) }}</el-tag>
           <h4>{{ r.customer_name || r.customerName }}</h4>
@@ -39,7 +45,30 @@
           <el-button size="small" type="danger" plain :disabled="r.status !== 'created' && r.status !== 'booked'" @click="updateStatus(r, 'cancelled')">取消</el-button>
         </div>
       </div>
-      <el-empty v-if="!reservations.length" description="暂无预约" />
+      <el-empty v-if="!todayReservations.length" description="今日暂无预约" />
+    </div>
+      </section>
+      <section class="panel">
+        <div class="panel-header">
+          <h3>待处理订单</h3>
+          <span>{{ pendingOrders.length }} 条</span>
+        </div>
+        <div class="order-list">
+          <div v-for="order in pendingOrders" :key="order.id" class="order-card">
+            <div>
+              <div class="order-title">
+                <strong>订单 #{{ order.id }}</strong>
+                <el-tag type="warning" size="small">{{ order.payment_status }}</el-tag>
+              </div>
+              <p>{{ order.customer_name || '顾客' }} · 预约 #{{ order.reservation_id }}</p>
+              <p class="order-meta">
+                {{ order.reservation_date || today }} {{ order.reservation_time || '' }} · {{ cents(order.total_cents) }}
+              </p>
+            </div>
+          </div>
+          <el-empty v-if="!pendingOrders.length" description="暂无待处理订单" />
+        </div>
+      </section>
     </div>
   </div>
 </template>
@@ -48,18 +77,33 @@
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/utils/http'
-import { statusLabel, statusType } from '@/utils/format'
+import { cents, statusLabel, statusType } from '@/utils/format'
 import { usePolling } from '@/composables/usePolling'
-import type { Reservation } from '@/types'
+import type { Order, Reservation } from '@/types'
 
 const reservations = ref<Reservation[]>([])
+const orders = ref<Order[]>([])
 const statusFilter = ref('')
+const today = new Date().toISOString().slice(0, 10)
+
+const todayReservations = computed(() =>
+  reservations.value.filter(r => r.reservation_date === today),
+)
+
+const pendingOrders = computed(() =>
+  orders.value.filter(order =>
+    order.status === 'paid'
+    && order.payment_status !== 'refunded'
+    && (!order.reservation_date || order.reservation_date === today),
+  ),
+)
 
 const stats = computed(() => ({
-  total: reservations.value.length,
-  seated: reservations.value.filter(r => r.status === 'seated').length,
-  finished: reservations.value.filter(r => r.status === 'finished').length,
-  pending: reservations.value.filter(r => r.status === 'created' || r.status === 'booked').length,
+  total: todayReservations.value.length,
+  seated: todayReservations.value.filter(r => r.status === 'seated').length,
+  finished: todayReservations.value.filter(r => r.status === 'finished').length,
+  pending: todayReservations.value.filter(r => r.status === 'created' || r.status === 'booked').length
+    + pendingOrders.value.length,
 }))
 
 async function loadReservations() {
@@ -67,6 +111,15 @@ async function loadReservations() {
   if (statusFilter.value) params.status = statusFilter.value
   try { reservations.value = await api.get<Reservation[]>('/reservations', params) }
   catch { /* keep previous data */ }
+}
+
+async function loadOrders() {
+  try { orders.value = await api.get<Order[]>('/orders') }
+  catch { /* keep previous data */ }
+}
+
+async function refreshAll() {
+  await Promise.all([loadReservations(), loadOrders()])
 }
 
 async function updateStatus(r: Reservation, status: string) {
@@ -77,7 +130,7 @@ async function updateStatus(r: Reservation, status: string) {
   } catch (e) { ElMessage.error((e as Error).message) }
 }
 
-const { lastUpdated } = usePolling(loadReservations, 10000)
+const { lastUpdated } = usePolling(refreshAll, 10000)
 </script>
 
 <style scoped>
@@ -85,10 +138,22 @@ const { lastUpdated } = usePolling(loadReservations, 10000)
 .stat-card { background: #fff; padding: 16px; border-radius: 12px; border: 1px solid #e8e5df; }
 .stat-card span { display: block; font-size: 13px; color: #667085; margin-bottom: 4px; }
 .stat-card strong { font-size: 24px; color: #172033; }
+.today-sections { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }
+.panel { background: #fff; padding: 16px; border-radius: 12px; border: 1px solid #e8e5df; }
+.panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.panel-header h3 { margin: 0; font-size: 16px; color: #172033; }
 .filter-bar { margin-bottom: 16px; }
 .res-list { display: flex; flex-direction: column; gap: 10px; }
 .res-card { display: flex; justify-content: space-between; align-items: center; padding: 16px; background: #fff; border-radius: 12px; border: 1px solid #e8e5df; }
 .res-info h4 { margin: 6px 0 2px; color: #172033; }
 .res-info p { font-size: 13px; color: #667085; }
 .res-actions { display: flex; gap: 6px; }
+.order-list { display: flex; flex-direction: column; gap: 10px; }
+.order-card { padding: 14px; border-radius: 12px; border: 1px solid #e8e5df; background: #fcfcfd; }
+.order-title { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+.order-card p { margin: 4px 0 0; font-size: 13px; color: #667085; }
+.order-meta { color: #475467; }
+@media (max-width: 960px) {
+  .today-sections { grid-template-columns: 1fr; }
+}
 </style>

@@ -5,6 +5,11 @@
       <el-form-item><el-input v-model="searchForm.mobileNumber" placeholder="手机号" clearable /></el-form-item>
       <el-form-item><el-date-picker v-model="searchForm.date" type="date" value-format="YYYY-MM-DD" placeholder="日期" clearable /></el-form-item>
       <el-form-item>
+        <el-select v-model="searchForm.storeId" placeholder="门店" clearable style="width: 180px" @change="search">
+          <el-option v-for="store in stores" :key="store.id" :label="`${store.city} · ${store.name}`" :value="store.id" />
+        </el-select>
+      </el-form-item>
+      <el-form-item>
         <el-select v-model="searchForm.status" placeholder="状态" clearable style="width: 130px" @change="search">
           <el-option label="待确认" value="created" />
           <el-option label="已预约" value="booked" />
@@ -38,20 +43,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { api } from '@/utils/http'
 import { statusLabel, statusType } from '@/utils/format'
 import { usePolling } from '@/composables/usePolling'
-import type { Reservation } from '@/types'
+import type { Reservation, Store } from '@/types'
 
 const reservations = ref<Reservation[]>([])
-const searchForm = reactive({ mobileNumber: '', date: '', status: '' })
+const stores = ref<Store[]>([])
+const searchForm = reactive({
+  mobileNumber: '',
+  date: '',
+  storeId: undefined as number | undefined,
+  status: '',
+})
 
 async function search() {
   const params: Record<string, unknown> = {}
   if (searchForm.mobileNumber) params.mobileNumber = searchForm.mobileNumber
   if (searchForm.date) params.date = searchForm.date
+  if (searchForm.storeId) params.storeId = searchForm.storeId
   if (searchForm.status) params.status = searchForm.status
   try { reservations.value = await api.get<Reservation[]>('/reservations', params) }
   catch { reservations.value = [] }
@@ -64,6 +76,11 @@ async function updateStatus(r: Reservation, status: string) {
     ElMessage.success(`预约 #${updated.id} → ${statusLabel(status)}`)
   } catch (e) { ElMessage.error((e as Error).message) }
 }
+
+onMounted(async () => {
+  try { stores.value = await api.get<Store[]>('/stores') }
+  catch { stores.value = [] }
+})
 
 usePolling(search, 10000)
 </script>
