@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -106,5 +107,61 @@ class CatalogServiceTest {
         assertEquals(Boolean.TRUE, result.get(0).get("cat_zone"));
         assertEquals(Boolean.FALSE, result.get(0).get("available_for_slot"));
         verify(tableMapper).listTables(1L, null, null, 2);
+    }
+
+    @Test
+    @DisplayName("listTables：只传一个时段字段时，空字符串归一化为 null 后透传 Mapper")
+    void listTablesNormalizesSingleBlankSlotFieldToNull() {
+        when(tableMapper.listTables(anyLong(), any(), any(), any())).thenReturn(List.of());
+
+        catalogService.listTables(1L, "2026-09-01", "", 2);
+
+        verify(tableMapper).listTables(1L, "2026-09-01", null, 2);
+    }
+
+    @Test
+    @DisplayName("listTables：availableOnly=true 只保留 available_for_slot=true 的桌位")
+    void listTablesAvailableOnlyFiltersOccupiedAndDisabledRows() {
+        Map<String, Object> free = new HashMap<>();
+        free.put("id", 1);
+        free.put("status", "available");
+        free.put("cat_zone", 0);
+        free.put("available_for_slot", 1);
+        Map<String, Object> occupied = new HashMap<>();
+        occupied.put("id", 2);
+        occupied.put("status", "available");
+        occupied.put("cat_zone", 0);
+        occupied.put("available_for_slot", 0);
+        Map<String, Object> maintenance = new HashMap<>();
+        maintenance.put("id", 3);
+        maintenance.put("status", "maintenance");
+        maintenance.put("cat_zone", 0);
+        maintenance.put("available_for_slot", 0);
+        when(tableMapper.listTables(anyLong(), anyString(), anyString(), any()))
+                .thenReturn(new ArrayList<>(List.of(free, occupied, maintenance)));
+
+        List<Map<String, Object>> result =
+                catalogService.listTables(1L, "2026-09-01", "18:30", 2, true);
+
+        assertEquals(1, result.size());
+        assertEquals(1, result.get(0).get("id"));
+        assertEquals(Boolean.TRUE, result.get(0).get("available_for_slot"));
+    }
+
+    @Test
+    @DisplayName("listTables：不传 availableOnly 时保留不可用桌位（available_for_slot=false）")
+    void listTablesWithoutAvailableOnlyKeepsUnavailableRows() {
+        Map<String, Object> occupied = new HashMap<>();
+        occupied.put("id", 2);
+        occupied.put("cat_zone", 0);
+        occupied.put("available_for_slot", 0);
+        when(tableMapper.listTables(anyLong(), anyString(), anyString(), any()))
+                .thenReturn(new ArrayList<>(List.of(occupied)));
+
+        List<Map<String, Object>> result =
+                catalogService.listTables(1L, "2026-09-01", "18:30", 2, null);
+
+        assertEquals(1, result.size());
+        assertEquals(Boolean.FALSE, result.get(0).get("available_for_slot"));
     }
 }

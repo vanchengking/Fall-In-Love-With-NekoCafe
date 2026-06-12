@@ -86,16 +86,8 @@ class CatalogPublicApiTest {
     @Test
     @DisplayName("匿名 GET /api/tables：200，含容量/区域/猫区/可用性，筛选参数透传服务层")
     void anonymousTablesListExposesSeatsAreaCatZone() throws Exception {
-        Map<String, Object> table = new LinkedHashMap<>();
-        table.put("id", 9);
-        table.put("store_id", 3);
-        table.put("code", "W01");
-        table.put("seats", 4);
-        table.put("area", "window");
-        table.put("cat_zone", true);
-        table.put("status", "available");
-        table.put("available_for_slot", true);
-        when(catalogService.listTables(3L, "2026-09-01", "19:00", 4)).thenReturn(List.of(table));
+        when(catalogService.listTables(3L, "2026-09-01", "19:00", 4, null))
+                .thenReturn(List.of(tableRow(9, "W01", true)));
 
         mockMvc.perform(get("/api/tables")
                         .param("storeId", "3")
@@ -103,12 +95,62 @@ class CatalogPublicApiTest {
                         .param("time", "19:00")
                         .param("partySize", "4"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].id").value(9))
+                .andExpect(jsonPath("$.data[0].store_id").value(3))
+                .andExpect(jsonPath("$.data[0].code").value("W01"))
                 .andExpect(jsonPath("$.data[0].seats").value(4))
                 .andExpect(jsonPath("$.data[0].area").value("window"))
                 .andExpect(jsonPath("$.data[0].cat_zone").value(true))
                 .andExpect(jsonPath("$.data[0].status").value("available"))
                 .andExpect(jsonPath("$.data[0].available_for_slot").value(true));
 
-        verify(catalogService).listTables(3L, "2026-09-01", "19:00", 4);
+        verify(catalogService).listTables(3L, "2026-09-01", "19:00", 4, null);
+    }
+
+    @Test
+    @DisplayName("GET /api/tables?availableOnly=true：availableOnly 透传服务层")
+    void tablesListPassesAvailableOnlyThrough() throws Exception {
+        when(catalogService.listTables(3L, "2026-09-01", "19:00", 4, true))
+                .thenReturn(List.of(tableRow(9, "W01", true)));
+
+        mockMvc.perform(get("/api/tables")
+                        .param("storeId", "3")
+                        .param("date", "2026-09-01")
+                        .param("time", "19:00")
+                        .param("partySize", "4")
+                        .param("availableOnly", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].available_for_slot").value(true));
+
+        verify(catalogService).listTables(3L, "2026-09-01", "19:00", 4, true);
+    }
+
+    @Test
+    @DisplayName("不带 availableOnly 时：不可用桌位原样返回且 available_for_slot=false")
+    void tablesListKeepsUnavailableRowsWithFlagFalse() throws Exception {
+        when(catalogService.listTables(3L, "2026-09-01", "19:00", 4, null))
+                .thenReturn(List.of(tableRow(10, "W02", false)));
+
+        mockMvc.perform(get("/api/tables")
+                        .param("storeId", "3")
+                        .param("date", "2026-09-01")
+                        .param("time", "19:00")
+                        .param("partySize", "4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].code").value("W02"))
+                .andExpect(jsonPath("$.data[0].available_for_slot").value(false));
+    }
+
+    private static Map<String, Object> tableRow(int id, String code, boolean availableForSlot) {
+        Map<String, Object> table = new LinkedHashMap<>();
+        table.put("id", id);
+        table.put("store_id", 3);
+        table.put("code", code);
+        table.put("seats", 4);
+        table.put("area", "window");
+        table.put("cat_zone", true);
+        table.put("status", "available");
+        table.put("available_for_slot", availableForSlot);
+        return table;
     }
 }

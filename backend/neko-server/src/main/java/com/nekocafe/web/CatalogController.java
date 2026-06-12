@@ -59,13 +59,14 @@ public class CatalogController {
         return ApiResponse.of(catalogService.listStores());
     }
 
-    @Operation(summary = "桌位列表与时段可用性")
+    @Operation(summary = "桌位列表与时段可用性（availableOnly=true 时只返回真正可用桌位）")
     @GetMapping("/tables")
     public ApiResponse tables(@RequestParam(required = false) Long storeId,
                               @RequestParam(required = false) String date,
                               @RequestParam(required = false) String time,
-                              @RequestParam(required = false) Integer partySize) {
-        return ApiResponse.of(catalogService.listTables(storeId, date, time, partySize));
+                              @RequestParam(required = false) Integer partySize,
+                              @RequestParam(required = false) Boolean availableOnly) {
+        return ApiResponse.of(catalogService.listTables(storeId, date, time, partySize, availableOnly));
     }
 
     @Operation(summary = "菜品列表")

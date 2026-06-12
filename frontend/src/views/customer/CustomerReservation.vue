@@ -28,6 +28,7 @@
             <div class="legend">
               <span class="legend-item"><span class="dot dot-free"></span>可选</span>
               <span class="legend-item"><span class="dot dot-occupied"></span>已占用</span>
+              <span class="legend-item"><span class="dot dot-disabled"></span>停用</span>
               <span class="legend-item"><span class="dot dot-selected"></span>已选</span>
               <span class="legend-item"><span class="dot dot-cat"></span>猫区</span>
             </div>
@@ -72,17 +73,17 @@
               </el-col>
               <el-col :span="8">
                 <el-form-item label="日期">
-                  <el-date-picker v-model="form.reservationDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" @change="refreshTables" />
+                  <el-date-picker v-model="form.reservationDate" type="date" value-format="YYYY-MM-DD" style="width: 100%" @change="onSlotChange" />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item label="时间">
-                  <el-time-picker v-model="form.reservationTime" format="HH:mm" value-format="HH:mm" style="width: 100%" @change="refreshTables" />
+                  <el-time-picker v-model="form.reservationTime" format="HH:mm" value-format="HH:mm" style="width: 100%" @change="onSlotChange" />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item label="人数">
-                  <el-input-number v-model="form.partySize" :min="1" :max="12" style="width: 100%" @change="refreshTables" />
+                  <el-input-number v-model="form.partySize" :min="1" :max="12" style="width: 100%" @change="onSlotChange" />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -112,11 +113,12 @@
           <h4>推荐桌位</h4>
           <div class="rec-table-grid">
             <div v-for="table in recommendations.tables" :key="table.id"
-              class="rec-table-card" :class="{ selected: form.tableId === table.id }"
-              @click="form.tableId = form.tableId === table.id ? '' : table.id">
+              class="rec-table-card" :class="{ selected: form.tableId === table.id, unavailable: !isSelectable(table) }"
+              @click="selectTable(table)">
               <div class="rec-table-code">{{ table.code }}</div>
               <div class="rec-table-info">{{ table.seats }}人 · {{ areaLabel(table.area) }}</div>
-              <el-tag v-if="table.cat_zone" size="small" type="success">猫区</el-tag>
+              <el-tag v-if="!isSelectable(table)" size="small" type="info">不可选</el-tag>
+              <el-tag v-else-if="table.cat_zone" size="small" type="success">猫区</el-tag>
             </div>
           </div>
         </div>
@@ -251,33 +253,57 @@ const discountLabel = computed(() => {
   return ''
 })
 
-function tableClass(table: DiningTable) {
+/** 桌位查询参数：始终携带当前时段与人数，避免无时段列表被当成全部可选 */
+function tableQuery() {
   return {
-    occupied: table.available_for_slot === false,
+    storeId: form.storeId, date: form.reservationDate,
+    time: form.reservationTime, partySize: form.partySize,
+  }
+}
+
+/** 桌位自身状态正常且当前时段未被占用才可选 */
+function isSelectable(table: DiningTable) {
+  return table.available_for_slot !== false && (!table.status || table.status === 'available')
+}
+
+function tableClass(table: DiningTable) {
+  const stopped = !!table.status && table.status !== 'available'
+  return {
+    disabled: stopped,
+    occupied: !stopped && table.available_for_slot === false,
     selected: form.tableId === table.id,
     'cat-zone': table.cat_zone,
   }
 }
 
 function selectTable(table: DiningTable) {
-  if (table.available_for_slot === false) return
+  if (!isSelectable(table)) return
   form.tableId = form.tableId === table.id ? '' : table.id
 }
 
-async function refreshTables() {
-  try {
-    tables.value = await api.get<DiningTable[]>('/tables', {
-      storeId: form.storeId, date: form.reservationDate,
-      time: form.reservationTime, partySize: form.partySize,
-    })
-  } catch { tables.value = fallbackTables }
+/** 已选桌位被过滤（容量不足）或已不可选（占用/停用）时清空选择 */
+function pruneStaleSelection() {
+  if (form.tableId === '') return
+  const selected = tables.value.find(t => t.id === form.tableId)
+  if (!selected || !isSelectable(selected)) form.tableId = ''
 }
 
-/** 加载当前门店的桌位/猫咪/菜单 */
+async function refreshTables() {
+  try { tables.value = await api.get<DiningTable[]>('/tables', tableQuery()) }
+  catch { tables.value = fallbackTables }
+  pruneStaleSelection()
+}
+
+/** 日期/时间/人数变化：同步刷新桌位可用性与推荐结果 */
+async function onSlotChange() {
+  await Promise.all([refreshTables(), refreshRecommendations()])
+}
+
+/** 加载当前门店的桌位/猫咪/菜单（桌位带当前时段与人数） */
 async function loadStoreData() {
   try {
     const [t, c, m] = await Promise.all([
-      api.get<DiningTable[]>('/tables', { storeId: form.storeId }),
+      api.get<DiningTable[]>('/tables', tableQuery()),
       api.get<CatType[]>('/cats', { storeId: form.storeId }),
       api.get<MenuItem[]>('/menu-items', { storeId: form.storeId }),
     ])
@@ -285,6 +311,7 @@ async function loadStoreData() {
   } catch {
     tables.value = fallbackTables; cats.value = fallbackCats; menuItems.value = fallbackMenuItems
   }
+  pruneStaleSelection()
 }
 
 /** 切换门店：清空已选桌位/推荐猫咪，重载该店数据与推荐 */
@@ -299,11 +326,12 @@ async function refreshRecommendations() {
   try {
     const rec = await api.get<RecType>('/recommendations', {
       userId: 1, storeId: form.storeId, preferences: form.preferences.join(','),
+      date: form.reservationDate, time: form.reservationTime, partySize: form.partySize,
     })
     recommendations.value = rec
     if (rec.cat) form.recommendedCatId = rec.cat.id
   } catch {
-    recommendations.value = { cat: cats.value[0] || null, tables: tables.value.slice(0, 3), menuItems: menuItems.value.slice(0, 3) }
+    recommendations.value = { cat: cats.value[0] || null, tables: tables.value.filter(isSelectable).slice(0, 3), menuItems: menuItems.value.slice(0, 3) }
   }
 }
 
@@ -323,7 +351,8 @@ async function createReservation() {
     const created = await api.post<Reservation>('/reservations', payload)
     cart.setReservationId(created.id)
     ElMessage.success(`预约成功！桌位：${created.table_code || '自动分配'}`)
-    await refreshTables()
+    // 刚预约的桌位在当前时段已被占用，同步刷新布局与推荐（并由 prune 清空该选择）
+    await Promise.all([refreshTables(), refreshRecommendations()])
   } catch (e) { ElMessage.error((e as Error).message) }
   finally { loading.value = false }
 }
@@ -380,6 +409,7 @@ onMounted(async () => {
 .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 .dot-free { background: #d1fae5; border: 1px solid #6ee7b7; }
 .dot-occupied { background: #f3f4f6; border: 1px solid #d1d5db; }
+.dot-disabled { background: #fafafa; border: 1px dashed #9ca3af; }
 .dot-selected { background: #0f766e; }
 .dot-cat { background: #bbf7d0; border: 1px solid #4ade80; }
 
@@ -391,12 +421,13 @@ onMounted(async () => {
 .zone-tables { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px; }
 
 .table-seat { width: 90px; padding: 12px 8px; border: 2px solid #d1fae5; border-radius: 12px; text-align: center; cursor: pointer; transition: all 0.15s; background: #fff; }
-.table-seat:hover:not(.occupied) { border-color: #0f766e; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(15,118,110,0.15); }
+.table-seat:hover:not(.occupied):not(.disabled) { border-color: #0f766e; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(15,118,110,0.15); }
 .table-seat.selected { border-color: #0f766e; background: #e8f6f1; box-shadow: 0 0 0 3px rgba(15,118,110,0.2); }
 .table-seat.occupied { background: #f3f4f6; border-color: #e5e7eb; cursor: not-allowed; opacity: 0.55; }
 .table-seat.cat-zone { border-color: #86efac; background: #f0fdf4; }
+.table-seat.disabled { background: #fafafa; border-color: #d1d5db; border-style: dashed; cursor: not-allowed; opacity: 0.45; }
 .seat-icon { color: #0f766e; margin-bottom: 4px; }
-.table-seat.occupied .seat-icon { color: #9ca3af; }
+.table-seat.occupied .seat-icon, .table-seat.disabled .seat-icon { color: #9ca3af; }
 .seat-code { font-size: 16px; font-weight: 700; color: #172033; }
 .seat-capacity { font-size: 11px; color: #667085; }
 .selected-table-info { margin-top: 12px; font-size: 13px; color: #0f766e; display: flex; align-items: center; gap: 8px; }
@@ -419,6 +450,8 @@ onMounted(async () => {
 .rec-table-card { padding: 12px; border: 2px solid #e8e5df; border-radius: 10px; text-align: center; cursor: pointer; transition: all 0.15s; }
 .rec-table-card:hover { border-color: #0f766e; }
 .rec-table-card.selected { border-color: #0f766e; background: #e8f6f1; }
+.rec-table-card.unavailable { opacity: 0.5; cursor: not-allowed; }
+.rec-table-card.unavailable:hover { border-color: #e8e5df; }
 .rec-table-code { font-size: 18px; font-weight: 700; }
 .rec-table-info { font-size: 12px; color: #667085; margin-top: 2px; }
 

@@ -73,10 +73,19 @@ public class CatalogService {
     }
 
     public List<Map<String, Object>> listTables(Long storeId, String date, String time, Integer partySize) {
+        return listTables(storeId, date, time, partySize, null);
+    }
+
+    /** 桌位列表；availableOnly=true 时只返回 status=available 且该时段未被活跃预约占用的桌位。 */
+    public List<Map<String, Object>> listTables(Long storeId, String date, String time, Integer partySize,
+                                                Boolean availableOnly) {
         List<Map<String, Object>> rows = tableMapper.listTables(storeId,
                 emptyToNull(date), emptyToNull(time), partySize);
         Normalizer.boolField(rows, "cat_zone");
         Normalizer.boolField(rows, "available_for_slot");
+        if (Boolean.TRUE.equals(availableOnly)) {
+            rows.removeIf(row -> !Boolean.TRUE.equals(row.get("available_for_slot")));
+        }
         return rows;
     }
 
