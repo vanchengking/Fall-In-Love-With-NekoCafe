@@ -6,6 +6,7 @@ import com.nekocafe.security.JwtService;
 import com.nekocafe.service.DashboardService;
 import com.nekocafe.service.ReservationService;
 import com.nekocafe.service.StoreAdminService;
+import com.nekocafe.service.TableAdminService;
 import com.nekocafe.service.UserService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,7 +39,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 鉴权由后端 SecurityConfig 强制，不依赖前端路由守卫。
  */
 @WebMvcTest(controllers = {
-        ReservationController.class, DashboardController.class, StoreController.class, UserController.class})
+        ReservationController.class, DashboardController.class, StoreController.class, UserController.class,
+        TableController.class})
 @Import({SecurityConfig.class, JwtAuthFilter.class, JwtService.class})
 @TestPropertySource(properties = {
         "neko.jwt.secret=test-secret-0123456789abcdef-0123456789abcdef",
@@ -57,6 +59,8 @@ class RbacSecurityTest {
     private DashboardService dashboardService;
     @MockBean
     private StoreAdminService storeAdminService;
+    @MockBean
+    private TableAdminService tableAdminService;
     @MockBean
     private UserService userService;
 
@@ -138,6 +142,26 @@ class RbacSecurityTest {
     void customerCannotAccessAdminTables() throws Exception {
         mockMvc.perform(get("/api/admin/tables")
                         .header("Authorization", bearer(1L, "customer")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("staff 读取桌位实时状态（FR-TABLE-003）：放行")
+    void staffCanReadAdminTables() throws Exception {
+        when(tableAdminService.listTables(any(), any(), any(), any(), any(), any(), any()))
+                .thenReturn(List.of());
+        mockMvc.perform(get("/api/admin/tables?storeId=1&date=2026-06-12&time=18:30")
+                        .header("Authorization", bearer(2L, "staff")))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("staff 写桌位管理接口：403（GET 放行不扩大到写操作）")
+    void staffCannotWriteAdminTables() throws Exception {
+        mockMvc.perform(post("/api/admin/tables")
+                        .header("Authorization", bearer(2L, "staff"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
                 .andExpect(status().isForbidden());
     }
 

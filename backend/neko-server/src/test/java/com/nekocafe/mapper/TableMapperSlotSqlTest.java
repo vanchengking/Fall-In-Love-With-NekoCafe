@@ -16,6 +16,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * （cancelled/finished/no_show 不占用），available_for_slot 必须同时要求桌位
  * status='available'，partySize 按 seats >= partySize 过滤，且 date/time 均为空时
  * 不做时段判断（避免无时段查询被任意历史预约误判为占用）。
+ *
+ * <p>FR-TABLE-003 扩展口径：每行最多 JOIN 一条当前活跃预约（LIMIT 1 防止桌位行翻倍），
+ * 优先级 dining &gt; seated &gt; booked &gt; created 保证"使用中"优先展示，
+ * 且未指定 date/time 时不得挂任何当前预约。</p>
  */
 class TableMapperSlotSqlTest {
 
@@ -36,13 +40,28 @@ class TableMapperSlotSqlTest {
     }
 
     @Test
-    @DisplayName("getTableDetail：available_for_slot 口径与 listTables 一致")
+    @DisplayName("listTables：当前预约 JOIN 必须唯一且确定（FR-TABLE-003 实时状态）")
+    void listTablesSqlAttachesAtMostOneCurrentReservation() throws Exception {
+        String sql = selectSqlOf("listTables", Long.class, String.class, String.class, Integer.class);
+
+        assertTrue(sql.contains("cur.id AS current_reservation_id"), "必须暴露 current_reservation_id 供前端展示");
+        assertTrue(sql.contains("LIMIT 1"), "子查询必须 LIMIT 1，避免一桌多预约导致桌位行翻倍");
+        assertTrue(sql.contains("FIELD(r.status, 'dining', 'seated', 'booked', 'created')"),
+                "多条活跃预约时必须按 dining > seated > booked > created 取最优先一条");
+        assertTrue(sql.contains("NOT (#{date} IS NULL AND #{time} IS NULL)"),
+                "未指定 date/time 时不得挂任何当前预约（实时状态以查询时段为准）");
+    }
+
+    @Test
+    @DisplayName("getTableDetail：available_for_slot 与当前预约口径与 listTables 一致")
     void tableDetailSqlSharesTheSameAvailabilityContract() throws Exception {
         String sql = selectSqlOf("getTableDetail", Long.class, String.class, String.class);
 
         assertTrue(sql.contains(ACTIVE_STATUS_SET));
         assertTrue(sql.contains("t.status = 'available'"));
         assertTrue(sql.contains("#{date} IS NULL AND #{time} IS NULL"));
+        assertTrue(sql.contains("cur.id AS current_reservation_id"));
+        assertTrue(sql.contains("LIMIT 1"));
     }
 
     private static String selectSqlOf(String method, Class<?>... paramTypes) throws Exception {

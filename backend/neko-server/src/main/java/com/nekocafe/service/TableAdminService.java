@@ -2,6 +2,7 @@ package com.nekocafe.service;
 
 import com.nekocafe.common.ApiException;
 import com.nekocafe.common.Normalizer;
+import com.nekocafe.domain.ReservationStatus;
 import com.nekocafe.mapper.TableMapper;
 import org.springframework.stereotype.Service;
 
@@ -11,6 +12,13 @@ import java.util.Map;
 
 @Service
 public class TableAdminService {
+
+    /** FR-TABLE-003 实时状态中文标签（只读派生字段，不写库）。 */
+    private static final Map<String, String> RUNTIME_STATUS_LABELS = Map.of(
+            "free", "空闲",
+            "reserved", "已预约",
+            "in_use", "使用中",
+            "disabled", "停用");
 
     private final TableMapper tableMapper;
     private final CatalogService catalogService;
@@ -30,6 +38,7 @@ public class TableAdminService {
         List<Map<String, Object>> rows = tableMapper.listTables(storeId, emptyToNull(date), emptyToNull(time), partySize);
         Normalizer.boolField(rows, "cat_zone");
         Normalizer.boolField(rows, "available_for_slot");
+        rows.forEach(TableAdminService::applyRuntimeStatus);
         return rows.stream()
                 .filter(row -> matches(row.get("area"), area))
                 .filter(row -> matches(row.get("status"), status))
@@ -44,7 +53,33 @@ public class TableAdminService {
         }
         Normalizer.boolField(List.of(row), "cat_zone");
         Normalizer.boolField(List.of(row), "available_for_slot");
+        applyRuntimeStatus(row);
         return row;
+    }
+
+    /**
+     * FR-TABLE-003 桌位实时状态口径（以查询的 date/time/storeId 为准）：
+     * 基础状态非 available 一律 disabled（停用优先于任何预约）；
+     * 当前时段活跃预约 seated/dining 为 in_use，created/booked 为 reserved；
+     * 无活跃预约且基础状态 available 为 free。
+     */
+    private static void applyRuntimeStatus(Map<String, Object> row) {
+        String base = row.get("status") == null ? "available" : String.valueOf(row.get("status"));
+        Object rawCurrent = row.get("current_reservation_status");
+        String current = rawCurrent == null ? null : String.valueOf(rawCurrent);
+        String runtime;
+        if (!"available".equalsIgnoreCase(base)) {
+            runtime = "disabled";
+        } else if ("seated".equalsIgnoreCase(current) || "dining".equalsIgnoreCase(current)) {
+            runtime = "in_use";
+        } else if (current != null) {
+            runtime = "reserved";
+        } else {
+            runtime = "free";
+        }
+        row.put("runtime_status", runtime);
+        row.put("runtime_status_label", RUNTIME_STATUS_LABELS.get(runtime));
+        row.put("current_reservation_status_label", current == null ? null : ReservationStatus.labelOf(current));
     }
 
     public Map<String, Object> createTable(Map<String, Object> body) {

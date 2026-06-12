@@ -41,6 +41,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // 管理接口必须排在 GET /api/** permitAll 之前，否则顾客可匿名读取管理数据
+                        // FR-TABLE-003：店员桌位实时状态看板需要读桌位管理查询，GET 对 staff 放行；
+                        // 写操作（POST/PUT/DELETE）落入下一条规则，仍限 manager/operator/admin
+                        .requestMatchers(HttpMethod.GET, "/api/admin/tables/**")
+                            .hasAnyRole("STAFF", "MANAGER", "OPERATOR", "ADMIN")
                         .requestMatchers("/api/admin/dashboard/**", "/api/admin/stores/**", "/api/admin/tables/**")
                             .hasAnyRole("MANAGER", "OPERATOR", "ADMIN")
                         .requestMatchers("/api/admin/**").hasAnyRole("MANAGER", "OPERATOR", "ADMIN")

@@ -29,7 +29,7 @@ public class TableController {
         this.tableAdminService = tableAdminService;
     }
 
-    @Operation(summary = "List tables with availability")
+    @Operation(summary = "List tables with availability and runtime status (FR-TABLE-003: free/reserved/in_use/disabled)")
     @GetMapping
     public ApiResponse listTables(@RequestParam(required = false) Long storeId,
                                   @RequestParam(required = false) String date,

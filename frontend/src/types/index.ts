@@ -31,6 +31,22 @@ export interface DiningTable {
   score?: number
 }
 
+/** FR-TABLE-003 桌位实时状态：后端按查询的门店/日期/时间派生，空闲/已预约/使用中/停用 */
+export type TableRuntimeStatus = 'free' | 'reserved' | 'in_use' | 'disabled'
+
+/** /api/admin/tables 返回的店员桌位状态行（DiningTable + 实时状态与当前预约只读字段） */
+export interface StaffTableStatus extends DiningTable {
+  runtime_status?: TableRuntimeStatus
+  runtime_status_label?: string
+  current_reservation_id?: number | null
+  current_reservation_status?: ReservationStatus | null
+  current_reservation_status_label?: string | null
+  customer_name?: string | null
+  mobile_number?: string | null
+  reservation_time?: string | null
+  party_size?: number | null
+}
+
 export interface Cat {
   id: number
   store_id?: number
