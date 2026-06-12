@@ -86,6 +86,9 @@ export interface Order {
   status: string
   payment_status: string
   total_cents: number
+  reservation_date?: string
+  reservation_time?: string
+  customer_name?: string
   created_at?: string
 }
 

@@ -26,7 +26,7 @@ public interface DashboardMapper {
             SELECT COALESCE(SUM(total_cents), 0) AS revenue_cents
             FROM orders
             WHERE (#{storeId} IS NULL OR store_id = #{storeId})
-              AND payment_status = 'sandbox_paid'
+              AND payment_status IN ('paid', 'sandbox_paid')
             """)
     Map<String, Object> dashboardRevenue(@Param("storeId") Long storeId);
 
@@ -61,7 +61,7 @@ public interface DashboardMapper {
                    COALESCE(SUM(o.total_cents), 0) AS revenue_cents
             FROM orders o
             WHERE DATE(o.created_at) >= DATE_SUB(CURRENT_DATE, INTERVAL #{daysBack} DAY)
-              AND o.payment_status = 'sandbox_paid'
+              AND o.payment_status IN ('paid', 'sandbox_paid')
               AND (#{storeId} IS NULL OR o.store_id = #{storeId})
             GROUP BY DATE(o.created_at)
             ORDER BY DATE(o.created_at)
@@ -94,7 +94,7 @@ public interface DashboardMapper {
             LEFT JOIN (
               SELECT store_id, COALESCE(SUM(total_cents), 0) AS revenue_cents
               FROM orders
-              WHERE payment_status = 'sandbox_paid'
+              WHERE payment_status IN ('paid', 'sandbox_paid')
                 AND DATE(created_at) = CURRENT_DATE
               GROUP BY store_id
             ) rv ON rv.store_id = s.id

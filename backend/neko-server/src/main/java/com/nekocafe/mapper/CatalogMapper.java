@@ -92,7 +92,7 @@ public interface CatalogMapper {
             SELECT COALESCE(SUM(total_cents), 0) AS revenue_cents
             FROM orders
             WHERE (#{storeId} IS NULL OR store_id = #{storeId})
-              AND payment_status = 'sandbox_paid'
+              AND payment_status IN ('paid', 'sandbox_paid')
             """)
     Map<String, Object> dashboardRevenue(@Param("storeId") Long storeId);
 
