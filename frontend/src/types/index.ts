@@ -17,6 +17,7 @@ export interface DiningTable {
   seats: number
   area: string
   cat_zone: boolean
+  status?: string
   available_for_slot?: boolean
   score?: number
 }

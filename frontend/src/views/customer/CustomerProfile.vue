@@ -10,28 +10,32 @@
         <div class="field"><span class="label">积分</span><span class="points">{{ profile.points ?? '-' }}</span></div>
         
         <!-- 会员权益信息 -->
-        <div v-if="memberInfo" class="member-benefits">
+        <div class="member-benefits" v-if="memberInfo">
           <div class="benefit-item">
             <span class="label">会员折扣</span>
             <span class="discount">{{ (memberInfo.discount * 10).toFixed(1) }}折</span>
           </div>
-          <div v-if="memberInfo.next_level" class="benefit-item">
+          <div class="benefit-item" v-if="memberInfo.next_level">
             <span class="label">下一等级</span>
             <span>{{ getLevelLabel(memberInfo.next_level) }}</span>
           </div>
-          <div v-if="memberInfo.points_to_next_level > 0" class="benefit-item">
+          <div class="benefit-item" v-if="memberInfo.points_to_next_level > 0">
             <span class="label">距离升级</span>
             <span>还需 {{ memberInfo.points_to_next_level }} 积分</span>
           </div>
-          <div v-else class="benefit-item">
+        </div>
+        <div class="member-benefits" v-else>
+          <div class="benefit-item">
             <span class="label">会员状态</span>
             <span class="max-level">已达到最高等级</span>
           </div>
         </div>
-        
-        <el-button type="danger" plain style="width: 100%; margin-top: 16px" @click="handleLogout">退出登录</el-button>
+        <div class="profile-actions">
+          <el-button type="primary" plain style="width: 100%; border-radius: 8px" @click="goRecommend">查看专属推荐</el-button>
+          <el-button type="default" plain style="width: 100%; border-radius: 8px" @click="handleLogout">退出登录</el-button>
+        </div>
       </div>
-
+      
       <div class="profile-section">
         <el-tabs v-model="activeTab">
           <el-tab-pane label="个人资料" name="account">
@@ -59,7 +63,7 @@
             </div>
             <el-empty v-if="!reservations.length" description="暂无预约" />
           </el-tab-pane>
-
+          
           <el-tab-pane label="我的订单" name="orders">
             <div v-for="o in orders" :key="o.id" class="order-item">
               <div class="order-header" @click="toggleOrderDetail(o.id)">
@@ -87,7 +91,7 @@
                       <span class="discount-amount">- {{ cents(orderDetails[o.id].original_total_cents - orderDetails[o.id].total_cents) }}</span>
                     </div>
                   </div>
-                  
+                 
                   <div v-for="item in orderDetails[o.id].items" :key="item.id" class="order-dish">
                     <span>{{ item.menu_item_name }} × {{ item.quantity }}</span>
                     <span>{{ cents(item.unit_price_cents * item.quantity) }}</span>
@@ -113,11 +117,11 @@
             </div>
             <el-empty v-if="!orders.length" description="暂无订单" />
           </el-tab-pane>
-
+          
           <el-tab-pane label="用餐偏好" name="prefs">
             <div class="prefs-section">
               <p class="prefs-tip">设置您的用餐偏好，帮助我们为您提供更好的体验</p>
-
+              
               <!-- 当前偏好标签 -->
               <div class="current-prefs">
                 <span v-if="!preferences.length" class="no-prefs">暂无偏好设置，添加后我们将为您提供更个性化的服务</span>
@@ -130,7 +134,7 @@
                   style="margin: 0 8px 8px 0"
                 >{{ p }}</el-tag>
               </div>
-
+              
               <!-- 预设偏好快捷添加 -->
               <div class="preset-prefs">
                 <div class="preset-label">快捷添加：</div>
@@ -143,7 +147,7 @@
                   style="margin: 0 6px 6px 0"
                 >{{ pp }}</el-button>
               </div>
-
+              
               <!-- 自定义输入 -->
               <div class="custom-pref">
                 <el-input
@@ -155,7 +159,7 @@
                 />
                 <el-button size="small" @click="addCustomPreference" :disabled="!newPreference.trim()">添加</el-button>
               </div>
-
+              
               <el-button type="primary" size="small" style="margin-top: 16px" @click="savePreferences" :loading="savingPrefs">保存偏好</el-button>
             </div>
           </el-tab-pane>
@@ -189,7 +193,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, watch, onMounted } from 'vue'
+import { reactive, ref, watch, onMounted, computed} from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
@@ -351,6 +355,10 @@ watch(activeTab, (tab) => {
 
 function handleLogout() { auth.logout(); router.push('/login') }
 
+function goRecommend() {
+  router.push('/recommend')
+}
+
 function getLevelLabel(level: string) {
   const map: Record<string, string> = {
     'bronze': '青铜',
@@ -482,6 +490,9 @@ function getOrderStatusLabel(status: string) {
   font-size: 14px; 
   border-bottom: 1px solid rgba(255,255,255,0.2); 
 }
+.profile-actions { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+.profile-actions :deep(.el-button) { margin-left: 0 !important; margin-right: 0 !important; }
+.max-level { color: rgba(255,255,255,0.9); font-size: 13px; }
 .benefit-item:last-child { border-bottom: none; }
 .benefit-item .label { color: rgba(255,255,255,0.8); }
 .discount { font-weight: bold; font-size: 16px; }

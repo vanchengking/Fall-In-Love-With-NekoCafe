@@ -12,7 +12,8 @@ const roleDefaultRoute: Record<string, string> = {
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/login', name: 'login', component: () => import('@/views/Login.vue') },
+    { path: '/login', name: 'login', component: () => import('@/views/Login.vue'), meta: { public: true } },
+    { path: '/register', name: 'register', component: () => import('@/views/Register.vue'), meta: { public: true } },
 
     // 顾客路由
     {
@@ -28,6 +29,7 @@ const router = createRouter({
         { path: 'payment', name: 'customer-payment', component: () => import('@/views/customer/CustomerPayment.vue') },
         { path: 'reviews', name: 'customer-reviews', component: () => import('@/views/customer/CustomerReviews.vue') },
         { path: 'profile', name: 'customer-profile', component: () => import('@/views/customer/CustomerProfile.vue') },
+        { path: 'recommend', name: 'customer-recommend', component: () => import('@/views/customer/CustomerRecommend.vue') },
       ],
     },
 

@@ -278,7 +278,13 @@ async function createReservation() {
   }
   loading.value = true
   try {
-    const created = await api.post<Reservation>('/reservations', { ...form })
+    // 清理空字段，避免空字符串导致后端反序列化失败
+    const payload: any = { ...form }
+    if (payload.tableId === '' || payload.tableId === null) delete payload.tableId
+    if (payload.recommendedCatId === '' || payload.recommendedCatId === null) delete payload.recommendedCatId
+    if (Array.isArray(payload.preferences) && payload.preferences.length === 0) delete payload.preferences
+
+    const created = await api.post<Reservation>('/reservations', payload)
     cart.setReservationId(created.id)
     ElMessage.success(`预约成功！桌位：${created.table_code || '自动分配'}`)
     await refreshTables()

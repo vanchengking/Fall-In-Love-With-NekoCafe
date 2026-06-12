@@ -42,6 +42,11 @@
           </div>
         </div>
       </div>
+
+      <div style="text-align: center; margin-top: 16px; font-size: 13px; color: #667085">
+        没有账号？
+        <el-link type="primary" @click="router.push('/register')">立即注册</el-link>
+      </div>
     </div>
   </div>
 </template>
