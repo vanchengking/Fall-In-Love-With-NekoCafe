@@ -77,6 +77,7 @@ export interface Order {
   status: string
   payment_status: string
   total_cents: number
+  created_at?: string
 }
 
 export interface CatHealthRecord {
