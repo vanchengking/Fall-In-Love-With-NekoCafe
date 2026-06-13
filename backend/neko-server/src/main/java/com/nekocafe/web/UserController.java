@@ -14,6 +14,15 @@ import java.util.Map;
 
 /**
  * 用户资料与会员管理
+ * GET  /api/users                    用户列表（支持 role 筛选）
+ * GET  /api/users/me                 当前用户资料
+ * PUT  /api/users/me                 更新姓名/手机号/偏好
+ * GET  /api/users/me/member          会员等级与权益
+ * GET  /api/users/me/points/history  积分明细（最新在前）
+ */
+
+/**
+ * 用户资料与会员管理
  * GET  /api/users/me                 当前用户资料
  * PUT  /api/users/me                 更新姓名/手机号/偏好
  * GET  /api/users/me/member          会员等级与权益
@@ -31,6 +40,12 @@ public class UserController {
 
     public UserController(UserService userService) {
         this.userService = userService;
+    }
+
+    @Operation(summary = "用户列表（支持角色筛选）")
+    @GetMapping
+    public ApiResponse listUsers(@RequestParam(required = false) String role) {
+        return ApiResponse.of(userService.listUsers(role));
     }
 
     @Operation(summary = "获取当前用户资料")

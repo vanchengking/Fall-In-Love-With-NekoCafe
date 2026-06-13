@@ -1,9 +1,9 @@
 <template>
   <div class="login-wrapper">
     <div class="login-card">
-      <div class="brand-mark" style="width: 56px; height: 56px; font-size: 24px; margin: 0 auto 16px">N</div>
-      <h2 style="text-align: center; margin-bottom: 4px">NekoCafe 智慧餐饮预约平台</h2>
-      <p style="text-align: center; color: #667085; font-size: 14px; margin-bottom: 24px">短信验证码登录（沙箱环境）</p>
+      <div class="brand-mark" style="width: 56px; height: 56px; font-size: 24px; margin: 0 auto var(--space-base)">N</div>
+      <h2 style="text-align: center">NekoCafe 智慧餐饮预约平台</h2>
+      <p style="text-align: center; color: #667085; font-size: 14px; margin-bottom: var(--space-lg)">短信验证码登录（沙箱环境）</p>
 
       <el-form :model="form" :rules="rules" ref="formRef" label-position="top" @submit.prevent="handleSendCode">
         <el-form-item label="手机号" prop="mobileNumber">
@@ -21,7 +21,7 @@
           登录
         </el-button>
 
-        <el-button v-if="codeSent" style="width: 100%; margin-top: 4px" @click="codeSent = false">
+        <el-button v-if="codeSent" style="width: 100%; margin-top: var(--space-xs)" @click="codeSent = false">
           返回重输手机号
         </el-button>
       </el-form>
@@ -124,13 +124,18 @@ async function handleLogin() {
         mobileNumber: form.mobileNumber,
         code: form.code,
       })
+      if (!result?.user) {
+        ElMessage.error('登录返回数据异常，请重试')
+        return
+      }
       // 优先读取 access_token，兼容旧的 token 字段
       const accessToken = result.access_token ?? result.token ?? null
+      const loginUser = result.user
       auth.token = accessToken
-      auth.user = result.user
-      localStorage.setItem('neko-auth', JSON.stringify({ token: accessToken, user: result.user }))
-      ElMessage.success(`欢迎回来，${result.user.name || '用户'}`)
-      const redirect = (route.query.redirect as string) || roleDefaultRoute[result.user.role] || '/'
+      auth.user = loginUser
+      localStorage.setItem('neko-auth', JSON.stringify({ token: accessToken, user: loginUser }))
+      ElMessage.success(`欢迎回来，${loginUser.name || loginUser.mobileNumber || '用户'}`)
+      const redirect = (route.query.redirect as string) || roleDefaultRoute[loginUser.role] || '/'
       router.push(redirect)
     } catch (e) {
       ElMessage.error((e as Error).message)
@@ -146,46 +151,53 @@ async function handleLogin() {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: var(--space-lg);
   background: linear-gradient(135deg, #f5f7f3, #e8f6f1);
 }
 .login-card {
   width: 100%;
   max-width: 480px;
-  padding: 32px;
+  padding: var(--space-xl);
   border: 1px solid #e8e5df;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   background: #fff;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
 }
 .demo-section {
-  margin-top: 24px;
-  padding-top: 20px;
+  margin-top: var(--space-lg);
+  padding-top: var(--space-lg);
   border-top: 1px solid #f0eeea;
 }
 .demo-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-sm);
 }
-.demo-label { font-size: 14px; font-weight: 600; color: #172033; }
-.demo-hint { font-size: 12px; color: #667085; }
-.demo-grid { display: flex; flex-direction: column; gap: 8px; }
+.demo-label { font-size: var(--text-base); font-weight: 600; color: var(--ink); }
+.demo-hint { font-size: var(--text-xs); color: var(--muted); }
+.demo-grid { display: flex; flex-direction: column; gap: var(--space-sm); }
 .demo-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 10px;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-sm);
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: background 0.15s;
   border: 1px solid #f0eeea;
 }
-.demo-item:hover { background: #f8f9fa; }
-.demo-icon { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; font-size: 18px; flex-shrink: 0; }
+.demo-item:hover { background: var(--wash); }
+.demo-icon { width: 40px; height: 40px; border-radius: var(--radius-md); display: grid; place-items: center; font-size: 18px; flex-shrink: 0; }
 .demo-info { flex: 1; min-width: 0; }
 .demo-role { font-size: 14px; font-weight: 600; color: #172033; }
-.demo-phone { font-size: 12px; color: #0f766e; font-family: monospace; }
+.demo-phone { font-size: 12px; color: #0f766e; font-family: var(--font-mono); }
 .demo-desc { font-size: 12px; color: #667085; margin-top: 1px; }
+@media (max-width: 640px) {
+  .login-wrapper { padding: var(--space-base); }
+  .login-card { padding: var(--space-lg); border-radius: var(--radius-md); }
+  .demo-header { flex-direction: column; align-items: flex-start; gap: var(--space-xs); }
+  .demo-item { padding: var(--space-sm); }
+  .demo-desc { display: none; }
+}
 </style>

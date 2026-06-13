@@ -1,25 +1,58 @@
 import axios from 'axios'
 import type { AxiosInstance, AxiosRequestConfig } from 'axios'
+import { handleMockRequest } from '@/utils/mockData'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 
+// ── Mock 模式开关 ──
+// 已禁用：连接真实后端。如需临时启用 mock，在浏览器控制台执行：
+//   localStorage.setItem('neko-mock', '1'); location.reload()
+const USE_MOCK = localStorage.getItem('neko-mock') === '1'
+
+if (USE_MOCK) {
+  console.info('%c🐱 Mock 模式已启用 — 所有 API 请求将使用本地演示数据', 'color: #0f766e; font-weight: bold; font-size: 13px')
+}
+
+// ── Mock Axios Adapter ──
+// 拦截所有请求，直接返回 mockData 中的数据，不发网络请求
+const mockAdapter = (config: AxiosRequestConfig): Promise<unknown> => {
+  return new Promise((resolve) => {
+    const method = (config.method || 'get').toLowerCase()
+    const url = config.url || ''
+    const params = {
+      ...(config.params || {}),
+      ...(config.data || {}),
+    }
+    // 模拟 50~150ms 网络延迟
+    const delay = 50 + Math.random() * 100
+    setTimeout(() => {
+      const data = handleMockRequest(method, url, params)
+      resolve({ data, status: 200, statusText: 'OK', headers: {}, config })
+    }, delay)
+  })
+}
+
+// ── Axios 实例 ──
 const http: AxiosInstance = axios.create({
-  baseURL: API_BASE,
+  baseURL: USE_MOCK ? '' : API_BASE,
   timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
+  ...(USE_MOCK ? { adapter: mockAdapter } : {}),
 })
 
 http.interceptors.request.use((config) => {
-  try {
-    const raw = localStorage.getItem('neko-auth')
-    if (raw) {
-      const { token } = JSON.parse(raw)
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
+  if (!USE_MOCK) {
+    try {
+      const raw = localStorage.getItem('neko-auth')
+      if (raw) {
+        const { token } = JSON.parse(raw)
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`
+        }
       }
+    } catch {
+      // ignore
     }
-  } catch {
-    // ignore
   }
   return config
 })
@@ -37,6 +70,10 @@ function apiError(message: string, status?: number): ApiError {
 
 http.interceptors.response.use(
   (response) => {
+    // Mock 模式下 adapter 直接返回 { data }，跳过 envelope 解析
+    if (USE_MOCK) {
+      return response.data
+    }
     const envelope = response.data
     if (envelope && typeof envelope === 'object' && 'error' in envelope) {
       const msg = envelope.error?.message || '请求失败'

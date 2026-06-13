@@ -11,9 +11,11 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 用户服务：会员等级、积分管理（含流水）、资料维护
@@ -27,6 +29,35 @@ public class UserService {
     public UserService(UserMapper userMapper, PointTransactionMapper pointTransactionMapper) {
         this.userMapper = userMapper;
         this.pointTransactionMapper = pointTransactionMapper;
+    }
+
+    /**
+     * 列出用户（支持角色筛选）
+     */
+    public List<Map<String, Object>> listUsers(String role) {
+        QueryWrapper<User> qw = new QueryWrapper<>();
+        if (role != null && !role.isBlank()) {
+            String[] roles = role.split(",");
+            if (roles.length == 1) {
+                qw.eq("role", roles[0].trim());
+            } else {
+                qw.in("role", Arrays.stream(roles).map(String::trim).collect(Collectors.toList()));
+            }
+        }
+        qw.orderByAsc("id");
+        List<User> users = userMapper.selectList(qw);
+        return users.stream().map(u -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", u.getId());
+            m.put("name", u.getName());
+            m.put("mobile_number", u.getMobileNumber());
+            m.put("role", u.getRole());
+            m.put("member_level", u.getMemberLevel());
+            m.put("points", u.getPoints());
+            m.put("preferences", u.getPreferences());
+            m.put("created_at", u.getCreatedAt());
+            return m;
+        }).collect(Collectors.toList());
     }
 
     /**

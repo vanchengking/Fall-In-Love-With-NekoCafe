@@ -2,7 +2,7 @@
   <div class="store-reviews-page">
     <div class="page-header">
       <el-button text @click="goBack">← 返回</el-button>
-      <h2 style="margin: 12px 0 4px">{{ storeName }}</h2>
+      <h2 style="margin: var(--space-md) 0 var(--space-xs)">{{ storeName }}</h2>
       <div class="store-rating" v-if="ratingStats">
         <el-rate :model-value="ratingStats.avgRating" disabled :max="5" show-score
                  :score-template="'{value} 分（共 ' + ratingStats.total + ' 条评价）'" />
@@ -144,38 +144,38 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.store-reviews-page { max-width: 800px; margin: 0 auto; padding: 20px; }
-.page-header { margin-bottom: 20px; }
-.store-rating { margin-top: 4px; }
+.store-reviews-page { max-width: 800px; margin: 0 auto; padding: var(--space-base); }
+.page-header { margin-bottom: var(--space-base); }
+.store-rating { margin-top: var(--space-xs); }
 .rating-stats.panel {
-  background: #fff; padding: 16px 20px; border-radius: 12px;
-  border: 1px solid #e8e5df; margin-bottom: 20px;
+  background: #fff; padding: var(--space-base) var(--space-lg); border-radius: var(--radius-md);
+  border: 1px solid #e8e5df; margin-bottom: var(--space-base);
 }
-.stat-item { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 13px; }
+.stat-item { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: 6px; font-size: var(--text-sm); }
 .stars-label { width: 40px; text-align: right; color: #666; }
 .count-label { width: 60px; color: #999; }
-.review-list { margin-top: 8px; }
+.review-list { margin-top: var(--space-sm); }
 .review-card {
-  background: #fff; padding: 16px; border-radius: 12px;
-  border: 1px solid #e8e5df; margin-bottom: 12px;
+  background: #fff; padding: var(--space-base); border-radius: var(--radius-md);
+  border: 1px solid #e8e5df; margin-bottom: var(--space-md);
 }
-.review-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-.user-info { display: flex; align-items: center; gap: 8px; }
-.avatar-bg { background: #e8d5b7; color: #5c4a1e; font-size: 14px; }
-.nickname { font-size: 14px; font-weight: 500; color: #333; }
-.review-time { font-size: 12px; color: #999; margin-bottom: 8px; }
+.review-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-xs); }
+.user-info { display: flex; align-items: center; gap: var(--space-sm); }
+.avatar-bg { background: #e8d5b7; color: #5c4a1e; font-size: var(--text-base); }
+.nickname { font-size: var(--text-base); font-weight: 500; color: #333; }
+.review-time { font-size: var(--text-xs); color: #999; margin-bottom: var(--space-sm); }
 .dimension-scores {
-  display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px;
-  color: #4b5d6e; margin-bottom: 8px;
+  display: flex; gap: var(--space-base); flex-wrap: wrap; font-size: var(--text-sm);
+  color: #4b5d6e; margin-bottom: var(--space-sm);
 }
-.review-content { font-size: 14px; color: #172033; line-height: 1.6; margin-bottom: 8px; }
-.cat-tag { font-size: 12px; color: #8b6914; margin-bottom: 8px; }
+.review-content { font-size: var(--text-base); color: var(--ink); line-height: 1.6; margin-bottom: var(--space-sm); }
+.cat-tag { font-size: var(--text-xs); color: #8b6914; margin-bottom: var(--space-sm); }
 .merchant-reply {
-  background: #f6f4ef; border-radius: 8px;
-  padding: 10px 14px; margin-top: 8px; font-size: 13px; color: #5c4a1e;
+  background: #f6f4ef; border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md); margin-top: var(--space-sm); font-size: var(--text-sm); color: #5c4a1e;
 }
-.reply-label { font-weight: 600; margin-bottom: 4px; }
+.reply-label { font-weight: 600; margin-bottom: var(--space-xs); }
 .reply-content { line-height: 1.5; }
-.reply-time { font-size: 11px; color: #999; margin-top: 4px; }
-.loading-text { text-align: center; color: #999; padding: 20px; }
+.reply-time { font-size: 11px; color: #999; margin-top: var(--space-xs); }
+.loading-text { text-align: center; color: #999; padding: var(--space-base); }
 </style>

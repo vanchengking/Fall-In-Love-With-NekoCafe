@@ -17,11 +17,12 @@ export const useAuthStore = defineStore('auth', () => {
       const raw = localStorage.getItem('neko-auth')
       if (raw) {
         const parsed = JSON.parse(raw)
-        token.value = parsed.token
-        user.value = parsed.user
+        token.value = parsed.token || null
+        user.value = parsed.user || null
       }
     } catch {
-      // ignore
+      token.value = null
+      user.value = null
     }
   }
 
@@ -29,7 +30,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       await api.post('/auth/sms/send', { mobileNumber: DEMO_LOGIN.mobileNumber })
       const result = await api.post<AuthResult>('/auth/login', DEMO_LOGIN)
-      // 优先读取 access_token，兼容旧的 token 字段
+      if (!result?.user) return null
       const accessToken = result.access_token ?? result.token ?? null
       token.value = accessToken
       user.value = result.user

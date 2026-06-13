@@ -32,7 +32,7 @@
         <div class="cat-list">
           <div v-for="cat in recommendations.cat" :key="cat.id" class="cat-recommend-card">
             <div class="cat-img">
-              <img v-if="cat.photo_url" :src="cat.photo_url" />
+              <img v-if="cat.photo_url" :src="cat.photo_url" :alt="cat.name" />
               <div v-else class="cat-no-img"><Cat :size="36" /></div>
             </div>
             <div class="cat-info">
@@ -91,7 +91,7 @@
         <h3>推荐菜品 <span class="sub">根据你的口味推荐</span></h3>
         <div class="menu-list">
           <div v-for="item in recommendations.menuItems" :key="item.id" class="menu-recommend-card">
-            <img v-if="item.photo_url" :src="item.photo_url" class="menu-photo" />
+            <img v-if="item.photo_url" :src="item.photo_url" :alt="item.name" class="menu-photo" />
             <div class="menu-info">
               <strong>{{ item.name }}</strong>
               <span class="menu-category">{{ item.category }}</span>
@@ -199,48 +199,48 @@ function scoreColor(score?: number): string {
 </script>
 
 <style scoped>
-.recommend-page { max-width: 900px; margin: 0 auto; padding: 20px; }
-.page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+.recommend-page { max-width: 900px; margin: 0 auto; padding: var(--space-base); }
+.page-header { display: flex; align-items: center; gap: var(--space-md); margin-bottom: var(--space-lg); }
 .page-header h2 { margin: 0; flex: 1; }
 
-.store-selector { display: flex; align-items: center; gap: 10px; padding: 14px 18px; background: #fff; border-radius: 14px; border: 1px solid #f0ebe5; margin-bottom: 24px; }
-.selector-label { font-size: 14px; color: #666; flex-shrink: 0; }
+.store-selector { display: flex; align-items: center; gap: var(--space-sm); padding: var(--space-md) var(--space-base); background: #fff; border-radius: var(--radius-lg); border: 1px solid #f0ebe5; margin-bottom: var(--space-lg); }
+.selector-label { font-size: var(--text-base); color: #666; flex-shrink: 0; }
 
-.section { margin-bottom: 32px; }
-.section h3 { font-size: 18px; margin-bottom: 16px; color: #1a1a1a; }
-.section h3 .sub { font-size: 13px; color: #999; font-weight: normal; margin-left: 8px; }
+.section { margin-bottom: var(--space-xl); }
+.section h3 { font-size: var(--text-lg); margin-bottom: var(--space-base); color: var(--ink); }
+.section h3 .sub { font-size: var(--text-sm); color: #999; font-weight: normal; margin-left: var(--space-sm); }
 
 /* 猫咪推荐卡片 */
-.cat-list { display: flex; flex-direction: column; gap: 16px; }
-.cat-recommend-card { display: flex; gap: 16px; padding: 16px; background: #fff; border-radius: 14px; border: 1px solid #f0ebe5; }
-.cat-img { width: 100px; height: 100px; border-radius: 12px; overflow: hidden; flex-shrink: 0; }
+.cat-list { display: flex; flex-direction: column; gap: var(--space-base); }
+.cat-recommend-card { display: flex; gap: var(--space-base); padding: var(--space-base); background: #fff; border-radius: var(--radius-lg); border: 1px solid #f0ebe5; }
+.cat-img { width: 100px; height: 100px; border-radius: var(--radius-md); overflow: hidden; flex-shrink: 0; }
 .cat-img img { width: 100%; height: 100%; object-fit: cover; }
 .cat-no-img { width: 100%; height: 100%; background: #faf6f2; display: flex; align-items: center; justify-content: center; color: #bfbfbf; }
-.cat-info { flex: 1; min-width: 0; }
-.cat-info h4 { margin: 0 0 4px; font-size: 16px; }
-.cat-breed { color: #999; font-size: 12px; margin-bottom: 8px; display: block; }
-.match-score { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
-.score-label { font-size: 12px; color: #999; flex-shrink: 0; }
-.score-num { font-size: 13px; font-weight: 600; color: #e86f51; flex-shrink: 0; min-width: 40px; }
-.reasons { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
-.reason-tag { display: inline-block; background: #f6f3f0; color: #8c6d58; font-size: 11px; padding: 2px 8px; border-radius: 10px; border: 1px solid #e8e0d8; }
+.cat-info { flex: 1; min-width: 0; overflow: hidden; }
+.cat-info h4 { margin: 0 0 var(--space-xs); font-size: var(--text-base); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-breed { color: #999; font-size: var(--text-xs); margin-bottom: var(--space-sm); display: block; }
+.match-score { display: flex; align-items: center; gap: var(--space-sm); margin: var(--space-sm) 0; }
+.score-label { font-size: var(--text-xs); color: #999; flex-shrink: 0; }
+.score-num { font-size: var(--text-sm); font-weight: 600; color: var(--coral); flex-shrink: 0; min-width: 40px; }
+.reasons { display: flex; gap: var(--space-xs); flex-wrap: wrap; margin-top: 6px; }
+.reason-tag { display: inline-block; background: #f6f3f0; color: #8c6d58; font-size: 11px; padding: 2px var(--space-sm); border-radius: var(--radius-md); border: 1px solid #e8e0d8; }
 
 /* 桌位推荐 */
-.table-list { display: flex; flex-direction: column; gap: 12px; }
-.table-recommend-card { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; background: #fff; border-radius: 12px; border: 1px solid #f0ebe5; }
+.table-list { display: flex; flex-direction: column; gap: var(--space-md); }
+.table-recommend-card { display: flex; align-items: flex-start; gap: var(--space-md); padding: var(--space-md) var(--space-base); background: #fff; border-radius: var(--radius-md); border: 1px solid #f0ebe5; }
 .table-icon { font-size: 24px; flex-shrink: 0; }
 .table-info { flex: 1; }
-.table-info strong { font-size: 15px; }
-.table-info > span { display: block; font-size: 13px; color: #999; margin: 2px 0 8px; }
+.table-info strong { font-size: var(--text-base); }
+.table-info > span { display: block; font-size: var(--text-sm); color: #999; margin: 2px 0 var(--space-sm); }
 
 /* 菜品推荐 */
-.menu-list { display: flex; flex-direction: column; gap: 12px; }
-.menu-recommend-card { display: flex; gap: 12px; padding: 14px 16px; background: #fff; border-radius: 12px; border: 1px solid #f0ebe5; align-items: center; }
-.menu-photo { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; flex-shrink: 0; }
-.menu-info { flex: 1; min-width: 0; }
-.menu-info strong { font-size: 15px; }
-.menu-category { display: block; font-size: 13px; color: #999; margin: 2px 0 6px; }
-.menu-price { font-weight: 700; color: #e86f51; font-size: 15px; flex-shrink: 0; }
+.menu-list { display: flex; flex-direction: column; gap: var(--space-md); }
+.menu-recommend-card { display: flex; gap: var(--space-md); padding: var(--space-md) var(--space-base); background: #fff; border-radius: var(--radius-md); border: 1px solid #f0ebe5; align-items: center; }
+.menu-photo { width: 64px; height: 64px; border-radius: var(--radius-md); object-fit: cover; flex-shrink: 0; }
+.menu-info { flex: 1; min-width: 0; overflow: hidden; }
+.menu-info strong { font-size: var(--text-base); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.menu-category { display: block; font-size: var(--text-sm); color: #999; margin: 2px 0 6px; }
+.menu-price { font-weight: 700; color: var(--coral); font-size: var(--text-base); flex-shrink: 0; }
 
-.empty-tip { text-align: center; padding: 24px; color: #999; font-size: 14px; }
+.empty-tip { text-align: center; padding: var(--space-lg); color: #999; font-size: var(--text-base); }
 </style>

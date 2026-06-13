@@ -1,30 +1,43 @@
 <template>
-  <div>
-    <h2 style="margin-bottom: 20px">在线点单</h2>
-    <div v-if="memberDiscount < 1.0" class="discount-banner">
-      当前会员折扣：{{ memberDiscountLabel }}，价格已自动应用折扣
+  <div class="page-enter-active">
+    <h2>在线点单</h2>
+    <!-- 骨架屏 -->
+    <div v-if="loading" class="order-layout">
+      <div class="order-menu">
+        <div v-for="i in 5" :key="i" class="menu-item">
+          <div style="display: flex; align-items: center; gap: var(--space-sm)">
+            <div class="skeleton" style="width: 56px; height: 56px; border-radius: var(--radius-md); flex-shrink: 0"></div>
+            <div>
+              <div class="skeleton" style="height: 16px; width: 100px; margin-bottom: var(--space-xs)"></div>
+              <div class="skeleton" style="height: 13px; width: 140px"></div>
+            </div>
+          </div>
+          <div class="skeleton" style="height: 16px; width: 60px"></div>
+        </div>
+      </div>
+      <div class="order-cart">
+        <div class="skeleton" style="height: 20px; width: 80px; margin-bottom: var(--space-base)"></div>
+        <div class="skeleton" style="height: 60px; border-radius: var(--radius-md)"></div>
+      </div>
     </div>
-    <div class="order-layout">
+    <!-- 无数据 -->
+    <div v-else-if="!cart.menuItems.length">
+      <el-empty description="暂无可点菜品" />
+    </div>
+    <!-- 正常内容 -->
+    <div v-else class="order-layout">
       <div class="order-menu">
         <div v-for="item in cart.menuItems" :key="item.id" class="menu-item">
-          <div style="display: flex; align-items: center; gap: 12px">
-            <img v-if="item.photo_url" :src="item.photo_url" class="menu-photo" />
+          <div style="display: flex; align-items: center; gap: var(--space-sm)">
+            <img v-if="item.photo_url" :src="item.photo_url" :alt="item.name" class="menu-photo" />
+            <div v-else class="menu-photo-placeholder">🍽️</div>
             <div>
               <strong>{{ item.name }}</strong>
-              <span class="desc">{{ item.category }} · {{ item.tags?.join(' / ') }}</span>
+              <span class="desc">{{ tagLabels([item.category]) }} · {{ tagLabels(item.tags) }}</span>
             </div>
           </div>
           <div class="item-right">
-            <!-- 有折扣时显示原价（划线）和折扣价 -->
-            <div class="price-wrapper">
-              <template v-if="memberDiscount < 1.0">
-                <span class="original-price">{{ cents(item.price_cents) }}</span>
-                <span class="discounted-price">{{ cents(getDiscountedPrice(item.price_cents)) }}</span>
-              </template>
-              <template v-else>
-                <span class="price">{{ cents(item.price_cents) }}</span>
-              </template>
-            </div>
+            <span class="price">{{ cents(item.price_cents) }}</span>
             <el-input-number :model-value="cart.selectedMenu[item.id] || 0" @update:model-value="cart.setQuantity(item.id, $event)" :min="0" :max="9" size="small" />
           </div>
         </div>
@@ -33,26 +46,15 @@
         <h3>购物车</h3>
         <div v-if="cart.selectedOrderItems.length === 0" class="empty">请从左侧选择菜品</div>
         <div v-else>
-          <!-- 原价和折扣价对比 -->
-          <div v-if="memberDiscount < 1.0" class="price-comparison">
-            <div class="price-row">
-              <span>原价合计</span>
-              <span class="original">{{ cents(cart.orderTotal) }}</span>
-            </div>
-            <div class="price-row discount">
-              <span>{{ memberDiscountLabel }}优惠</span>
-              <span class="discount-amount">- {{ cents(cart.orderTotal - discountedTotal) }}</span>
-            </div>
-          </div>
           <div v-for="item in cart.selectedOrderItems" :key="item.menuItemId" class="cart-item">
             <span>{{ item.name }} × {{ item.quantity }}</span>
             <span>{{ cents(item.subtotal) }}</span>
           </div>
           <div class="cart-total">
-            <span>实付金额</span>
-            <span>{{ cents(memberDiscount < 1.0 ? discountedTotal : cart.orderTotal) }}</span>
+            <span>合计</span>
+            <span>{{ cents(cart.orderTotal) }}</span>
           </div>
-          <el-button type="primary" style="width: 100%; margin-top: 12px" :disabled="!cart.reservationId" @click="handleOrder">
+          <el-button type="primary" class="order-btn" :disabled="!cart.reservationId" :loading="ordering" @click="handleOrder">
             确认下单
           </el-button>
           <p v-if="!cart.reservationId" class="hint">请先创建预约后再下单</p>
@@ -63,85 +65,51 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useCartStore } from '@/stores/cart'
-import { useAuthStore } from '@/stores/auth'
 import { api } from '@/utils/http'
-import { cents } from '@/utils/format'
+import { cents, tagLabels } from '@/utils/format'
 import type { MenuItem } from '@/types'
 
 const cart = useCartStore()
 const router = useRouter()
-const auth = useAuthStore()
-const memberDiscount = ref<number>(1.0)
-const memberDiscountLabel = computed(() => {
-  if (memberDiscount.value === 0.85) return '8.5折'
-  if (memberDiscount.value === 0.9) return '9折'
-  if (memberDiscount.value === 0.95) return '9.5折'
-  return ''
-})
+const loading = ref(true)
+const ordering = ref(false)
 
-// 折后价合计（前端估算，实际以后端为准）
-const discountedTotal = computed(() => Math.round(cart.orderTotal * memberDiscount.value))
+function handleOrder() {
+  if (!cart.reservationId) { ElMessage.warning('请先创建预约'); return }
+  if (!cart.selectedOrderItems.length) { ElMessage.warning('请选择菜品'); return }
+  ordering.value = true
+  setTimeout(() => { router.push('/customer/payment'); ordering.value = false }, 300)
+}
 
-// 获取会员折扣率
 onMounted(async () => {
-  if (auth.isAuthenticated) {
-    try {
-      const info = await api.get<{ discount: number }>('/users/me/member')
-      memberDiscount.value = info.discount || 1.0
-    } catch {
-      memberDiscount.value = 1.0
-    }
-  }
   if (!cart.menuItems.length) {
     try { cart.menuItems = await api.get<MenuItem[]>('/menu-items', { storeId: 1 }) }
     catch { /* keep empty */ }
   }
+  loading.value = false
 })
-
-// 计算折扣价
-function getDiscountedPrice(priceCents: number): number {
-  return Math.round(priceCents * memberDiscount.value)
-}
-
-function handleOrder() {
-  if (!cart.reservationId) {
-    ElMessage.warning('请先创建预约')
-    return
-  }
-  if (!cart.selectedOrderItems.length) {
-    ElMessage.warning('请选择菜品')
-    return
-  }
-  router.push('/payment')
-}
 </script>
 
 <style scoped>
-.order-layout { display: grid; grid-template-columns: 1fr 320px; gap: 24px; }
+.order-layout { display: grid; grid-template-columns: 1fr 320px; gap: var(--space-lg); }
 @media (max-width: 768px) { .order-layout { grid-template-columns: 1fr; } }
-.order-menu { display: flex; flex-direction: column; gap: 10px; }
-.menu-item { display: flex; justify-content: space-between; align-items: center; padding: 16px; background: #fff; border-radius: 12px; border: 1px solid #e8e5df; }
-.menu-photo { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
-.desc { display: block; font-size: 13px; color: #667085; margin-top: 2px; }
-.item-right { display: flex; align-items: center; gap: 12px; }
-.price-wrapper { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-.original-price { font-size: 12px; color: #999; text-decoration: line-through; }
-.discounted-price { font-weight: 700; color: #e86f51; font-size: 15px; }
-.price { font-weight: 700; color: #e86f51; }
-.discount-banner { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 10px 16px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; text-align: center; }
-.order-cart { background: #fff; padding: 24px; border-radius: 12px; border: 1px solid #e8e5df; position: sticky; top: 84px; }
-.order-cart h3 { margin-bottom: 16px; }
-.empty { color: #667085; text-align: center; padding: 20px 0; }
-.cart-item { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; }
-.price-comparison { margin-bottom: 12px; padding: 12px; background: #fff8f0; border-radius: 8px; }
-.price-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
-.original { color: #999; }
-.discount { color: #e6a23c; }
-.discount-amount { color: #e6a23c; font-weight: 700; }
-.cart-total { display: flex; justify-content: space-between; padding-top: 12px; margin-top: 8px; border-top: 2px solid #0f766e; font-weight: 700; font-size: 16px; }
-.hint { font-size: 12px; color: #667085; text-align: center; margin-top: 8px; }
+.order-menu { display: flex; flex-direction: column; gap: var(--space-sm); }
+.menu-item { display: flex; justify-content: space-between; align-items: center; padding: var(--space-base); background: var(--paper); border-radius: var(--radius-lg); border: 1px solid var(--line); transition: all var(--transition-fast); }
+.menu-item:hover { border-color: var(--teal-light); box-shadow: var(--shadow-sm); }
+.menu-photo { width: 56px; height: 56px; object-fit: cover; border-radius: var(--radius-sm); flex-shrink: 0; }
+.menu-photo-placeholder { width: 56px; height: 56px; border-radius: var(--radius-sm); background: var(--wash); display: grid; place-items: center; font-size: 22px; flex-shrink: 0; }
+.desc { display: block; font-size: var(--text-sm); color: var(--muted); margin-top: var(--space-xs); }
+.item-right { display: flex; align-items: center; gap: var(--space-md); }
+.price { font-weight: 700; color: var(--coral); }
+.order-cart { background: var(--paper); padding: var(--space-lg); border-radius: var(--radius-lg); border: 1px solid var(--line); position: sticky; top: 84px; }
+.order-cart h3 { margin-bottom: var(--space-base); }
+.empty { color: var(--muted); text-align: center; padding: var(--space-lg) 0; }
+.cart-item { display: flex; justify-content: space-between; padding: var(--space-sm) 0; font-size: var(--text-sm); }
+.cart-total { display: flex; justify-content: space-between; padding-top: var(--space-md); margin-top: var(--space-sm); border-top: 2px solid var(--teal); font-weight: 700; font-size: var(--text-base); }
+.hint { font-size: var(--text-xs); color: var(--muted); text-align: center; margin-top: var(--space-sm); }
+.order-btn { width: 100%; margin-top: var(--space-md); }
 </style>

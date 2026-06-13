@@ -76,13 +76,13 @@ async function handleUpload(file: UploadRawFile) {
 .photo-upload { display: inline-block; }
 .upload-trigger {
   width: 100px; height: 100px;
-  border: 2px dashed #d1d5db; border-radius: 10px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
-  color: #667085; font-size: 12px; cursor: pointer;
+  border: 2px dashed #d1d5db; border-radius: var(--radius-md);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-xs);
+  color: #667085; font-size: var(--text-xs); cursor: pointer;
   transition: border-color 0.15s;
 }
 .upload-trigger:hover { border-color: #0f766e; color: #0f766e; }
 .photo-preview { position: relative; display: inline-block; }
-.photo-preview img { width: 100px; height: 100px; object-fit: cover; border-radius: 10px; border: 1px solid #e8e5df; }
+.photo-preview img { width: 100px; height: 100px; object-fit: cover; border-radius: var(--radius-md); border: 1px solid #e8e5df; }
 .remove-btn { position: absolute; top: -6px; right: -6px; }
 </style>

@@ -1,7 +1,7 @@
 <template>
-  <div style="text-align: center; padding: 80px 20px">
+  <div style="text-align: center; padding: var(--space-2xl) var(--space-lg)">
     <h1 style="font-size: 64px; color: #667085">404</h1>
-    <p style="margin: 12px 0 24px; color: #667085">页面不存在</p>
+    <p style="margin: var(--space-sm) 0 var(--space-lg); color: #667085">页面不存在</p>
     <el-button type="primary" @click="goHome">返回首页</el-button>
   </div>
 </template>

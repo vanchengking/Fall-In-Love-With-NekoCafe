@@ -1,48 +1,32 @@
 <template>
-  <div>
-    <div class="stores-header">
-      <div>
-        <h2 style="margin-bottom: 4px">选择门店</h2>
-        <p class="stores-summary">全国 {{ cityCount }} 个城市 · {{ stores.length }} 家门店</p>
-      </div>
-      <div class="stores-filters">
-        <el-input
-          v-model="keyword"
-          placeholder="搜索门店名称 / 地址"
-          clearable
-          style="width: 220px"
-        />
-        <el-select v-model="selectedCity" placeholder="全部城市" clearable style="width: 140px">
-          <el-option v-for="city in cities" :key="city" :label="`${city}（${cityStoreCount[city]}）`" :value="city" />
-        </el-select>
+  <div class="page-enter-active">
+    <h2>选择门店</h2>
+    <div v-if="loading" class="store-list">
+      <div v-for="i in 3" :key="i" class="store-card">
+        <div class="skeleton" style="height: 22px; width: 60%; margin-bottom: var(--space-sm)"></div>
+        <div class="skeleton" style="height: 16px; width: 80%; margin-bottom: var(--space-sm)"></div>
+        <div class="skeleton" style="height: 16px; width: 40%"></div>
       </div>
     </div>
-
-    <div class="city-chips">
-      <span class="city-chip" :class="{ active: !selectedCity }" @click="selectedCity = ''">全部</span>
-      <span
-        v-for="city in cities"
-        :key="city"
-        class="city-chip"
-        :class="{ active: selectedCity === city }"
-        @click="selectedCity = selectedCity === city ? '' : city"
-      >{{ city }}</span>
+    <div v-else-if="!stores.length" class="empty-state">
+      <el-empty description="暂无门店数据" />
     </div>
-
-    <el-empty v-if="filteredStores.length === 0" description="没有符合条件的门店，换个城市或关键词试试" />
-    <div v-else class="store-grid">
-      <div v-for="store in filteredStores" :key="store.id" class="store-card" @click="$router.push(`/stores/${store.id}`)">
-        <div class="store-title">
-          <h3>{{ store.name }}</h3>
-          <span class="store-city-tag">{{ store.city }}</span>
+    <div v-else class="store-list">
+      <div v-for="(store, idx) in stores" :key="store.id"
+           class="store-card card-interactive"
+           :class="idx % 2 === 0 ? 'store-card--left' : 'store-card--right'"
+           tabindex="0" role="link" :aria-label="`查看门店 ${store.name}`"
+           @click="$router.push(`/customer/stores/${store.id}`)"
+           @keydown.enter="$router.push(`/customer/stores/${store.id}`)"
+           @keydown.space.prevent="$router.push(`/customer/stores/${store.id}`)">
+        <div class="store-visual">
+          <div class="store-icon">🏪</div>
         </div>
-        <p class="store-meta">{{ store.address }}</p>
-        <p class="store-meta">电话：{{ store.phone }}</p>
-        <p class="store-meta">营业时间：{{ businessHours(store) }}</p>
-        <p v-if="store.table_count" class="store-meta store-stat">{{ store.table_count }} 桌 · {{ store.total_seats }} 座</p>
-        <div style="display: flex; gap: 8px; margin-top: 12px" @click.stop>
-          <el-button type="primary" plain size="small" @click="$router.push(`/stores/${store.id}`)">查看详情</el-button>
-          <el-button size="small" @click="$router.push(`/stores/${store.id}/reviews`)">查看评价</el-button>
+        <div class="store-content">
+          <div class="store-badge">{{ store.city }}</div>
+          <h3>{{ store.name }}</h3>
+          <p>{{ store.address }}</p>
+          <p class="store-meta">{{ store.phone }} · {{ store.table_count }} 桌 · {{ store.total_seats }} 座</p>
         </div>
       </div>
     </div>
@@ -50,66 +34,88 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { api } from '@/utils/http'
-import { businessHours } from '@/utils/format'
 import { fallbackStores } from '@/utils/fallback'
 import type { Store } from '@/types'
 
 const stores = ref<Store[]>([])
-const selectedCity = ref('')
-const keyword = ref('')
-
-const cities = computed(() => [...new Set(stores.value.map(s => s.city))])
-const cityCount = computed(() => cities.value.length)
-const cityStoreCount = computed(() => {
-  const counts: Record<string, number> = {}
-  for (const store of stores.value) counts[store.city] = (counts[store.city] || 0) + 1
-  return counts
-})
-
-const filteredStores = computed(() => {
-  const kw = keyword.value.trim().toLowerCase()
-  return stores.value.filter(store => {
-    if (selectedCity.value && store.city !== selectedCity.value) return false
-    if (kw && !`${store.name}${store.address}`.toLowerCase().includes(kw)) return false
-    return true
-  })
-})
+const loading = ref(true)
 
 onMounted(async () => {
   try { stores.value = await api.get<Store[]>('/stores') }
   catch { stores.value = fallbackStores }
+  finally { loading.value = false }
 })
 </script>
 
 <style scoped>
-.stores-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
-.stores-summary { color: #667085; font-size: 13px; }
-.stores-filters { display: flex; gap: 10px; flex-wrap: wrap; }
-
-.city-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
-.city-chip {
-  padding: 4px 14px; border-radius: 16px; font-size: 13px; cursor: pointer;
-  background: #fff; color: #667085; border: 1px solid #e8e5df; transition: all 0.15s;
+.empty-state { text-align: center; padding: var(--space-2xl); }
+.store-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
 }
-.city-chip:hover { border-color: #0f766e; color: #0f766e; }
-.city-chip.active { background: #0f766e; border-color: #0f766e; color: #fff; }
-
-.store-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
 .store-card {
-  padding: 24px; background: #fff; border-radius: 12px;
-  border: 1px solid #e8e5df; cursor: pointer;
-  transition: box-shadow 0.2s;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xl);
+  padding: var(--space-xl);
+  background: var(--paper);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line);
 }
-.store-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
-.store-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
-.store-card h3 { font-size: 18px; margin: 0; }
-.store-city-tag {
-  flex-shrink: 0; font-size: 12px; color: #0f766e; background: #e8f6f1;
-  padding: 2px 10px; border-radius: 10px;
+.store-card--right {
+  flex-direction: row-reverse;
 }
-.store-card p { color: #667085; font-size: 14px; }
-.store-meta { margin-top: 4px; }
-.store-stat { color: #8c6d58; }
+.store-visual {
+  flex-shrink: 0;
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, var(--teal-light), var(--teal-light));
+  border-radius: var(--radius-lg);
+  display: grid;
+  place-items: center;
+  font-size: 36px;
+}
+.store-card--right .store-visual {
+  background: linear-gradient(135deg, var(--coral-light), var(--coral-light));
+}
+.store-content {
+  flex: 1;
+}
+.store-badge {
+  display: inline-block;
+  padding: 2px var(--space-md);
+  background: var(--teal-light);
+  color: var(--teal-dark);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  margin-bottom: var(--space-sm);
+}
+.store-card--right .store-badge {
+  background: var(--coral-light);
+  color: var(--coral);
+}
+.store-card h3 {
+  margin-bottom: var(--space-xs);
+}
+.store-card p {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.store-meta {
+  margin-top: var(--space-xs);
+  font-size: var(--text-xs) !important;
+}
+@media (max-width: 640px) {
+  .store-card, .store-card--right {
+    flex-direction: column;
+    text-align: center;
+    gap: var(--space-base);
+    padding: var(--space-lg);
+  }
+  .store-visual { width: 64px; height: 64px; font-size: 28px; }
+}
 </style>

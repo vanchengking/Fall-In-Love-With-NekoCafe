@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS cats (
   health_status VARCHAR(32) NOT NULL DEFAULT 'healthy',
   weight_kg DECIMAL(4, 2),
   last_vaccine_at DATE,
+  photo_url VARCHAR(512),
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_cats_store FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -56,6 +57,7 @@ CREATE TABLE IF NOT EXISTS menu_items (
   price_cents INT NOT NULL CHECK (price_cents >= 0),
   tags JSON NOT NULL DEFAULT (JSON_ARRAY()),
   status VARCHAR(24) NOT NULL DEFAULT 'available',
+  photo_url VARCHAR(512),
   CONSTRAINT fk_menu_items_store FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -185,3 +187,34 @@ VALUES
 INSERT IGNORE INTO operation_alerts (id, store_id, level, title, detail)
 VALUES
   (1, 1, 'warning', '晚高峰桌位紧张', '18:00-20:00 已有多条预约，建议店员提前确认到店。');
+
+CREATE TABLE IF NOT EXISTS reviews (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id BIGINT,
+  store_id BIGINT NOT NULL,
+  rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
+  content TEXT,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_reviews_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT fk_reviews_store FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+INSERT IGNORE INTO reviews (id, user_id, store_id, rating, content, created_at)
+VALUES
+  (1, 1, 1, 5, '环境非常好，猫咪很亲人，拿铁拉花太可爱了！下次还来。', '2026-06-10 14:30:00'),
+  (2, 1, 1, 4, '团子太萌了，一直在腿上睡觉。甜品也不错，就是等位有点久。', '2026-06-09 18:20:00'),
+  (3, 1, 1, 5, '带小朋友来的，玩得特别开心。猫咪都很健康干净，工作人员也很热情。', '2026-06-08 11:15:00');
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  user_id BIGINT,
+  user_name VARCHAR(64),
+  action VARCHAR(32) NOT NULL COMMENT 'CREATE/UPDATE/DELETE/STATUS_CHANGE',
+  target_table VARCHAR(64) NOT NULL COMMENT 'reservations/orders/stores/...',
+  target_id BIGINT,
+  detail JSON,
+  ip_address VARCHAR(45),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_audit_created (created_at),
+  INDEX idx_audit_target (target_table, target_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

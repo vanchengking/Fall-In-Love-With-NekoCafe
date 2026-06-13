@@ -24,7 +24,7 @@
             </el-checkbox-group>
 
             <!-- 已选偏好标签 -->
-            <div v-if="form.preferences.length" style="margin: 8px 0 4px; display: flex; flex-wrap: wrap; gap: 6px">
+            <div v-if="form.preferences.length" style="margin: var(--space-sm) 0 var(--space-xs); display: flex; flex-wrap: wrap; gap: 6px">
               <el-tag
                 v-for="(p, idx) in form.preferences"
                 :key="idx"
@@ -34,7 +34,7 @@
                 size="small"
               >{{ p }}</el-tag>
             </div>
-            <div v-else style="color: #999; font-size: 12px; margin: 4px 0">还未选择任何偏好</div>
+            <div v-else style="color: #999; font-size: var(--text-xs); margin: var(--space-xs) 0">还未选择任何偏好</div>
 
             <el-input
               v-model="customPref"
@@ -208,15 +208,15 @@ function goLogin() {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: var(--space-lg);
   background: linear-gradient(135deg, #f5f7f3, #e8f6f1);
 }
 .login-card {
   width: 100%;
   max-width: 480px;
-  padding: 32px;
+  padding: var(--space-xl);
   border: 1px solid #e8e5df;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   background: #fff;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
 }

@@ -4,6 +4,7 @@ const pinoHttp = require("pino-http");
 const { config } = require("./config");
 const { apiRouter } = require("./routes/api");
 const { errorHandler, notFound } = require("./middleware/errorHandler");
+const { auditMiddleware } = require("./middleware/auditMiddleware");
 
 function createApp() {
   const app = express();
@@ -21,7 +22,7 @@ function createApp() {
     res.json({ ok: true, service: "neko-cafe-backend" });
   });
 
-  app.use("/api", apiRouter);
+  app.use("/api", auditMiddleware, apiRouter);
   app.use(notFound);
   app.use(errorHandler);
 

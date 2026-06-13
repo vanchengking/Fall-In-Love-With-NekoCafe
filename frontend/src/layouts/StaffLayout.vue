@@ -1,24 +1,28 @@
 <template>
   <div class="staff-layout">
-    <CustomerNavbar />
+    <StaffNavbar @store-change="onStoreChange" />
     <main class="staff-main">
-      <router-view />
+      <router-view :store-id="currentStoreId" />
     </main>
   </div>
 </template>
 
 <script setup lang="ts">
-import CustomerNavbar from '@/components/CustomerNavbar.vue'
+import { ref } from 'vue'
+import StaffNavbar from '@/components/StaffNavbar.vue'
+
+const currentStoreId = ref(1)
+function onStoreChange(id: number) { currentStoreId.value = id }
 </script>
 
 <style scoped>
 .staff-layout {
   min-height: 100vh;
-  background: #faf9f6;
+  background: var(--wash);
 }
 .staff-main {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 24px 20px;
+  padding: var(--space-lg);
 }
 </style>

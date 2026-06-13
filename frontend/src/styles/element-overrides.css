@@ -7,11 +7,154 @@
   --el-color-primary-light-9: #d4f0ed;
   --el-color-primary-dark-2: var(--teal-dark);
   --el-color-danger: var(--coral);
-  --el-border-radius-base: 8px;
-  --el-border-radius-small: 6px;
-  --el-font-family: Inter, "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+  --el-color-success: var(--success);
+  --el-border-radius-base: var(--radius-sm);
+  --el-border-radius-small: var(--radius-sm);
+  --el-font-family: Nunito, "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
 }
 
 .el-button {
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.el-button:active {
+  transform: scale(0.97);
+}
+
+/* ── 全局卡片交互 ── */
+.card-interactive {
+  transition: box-shadow var(--transition-fast), transform var(--transition-fast), border-color var(--transition-fast);
+  cursor: pointer;
+}
+.card-interactive:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+  border-color: var(--teal-light);
+}
+.card-interactive:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── 全局焦点样式（键盘导航） ── */
+.card-interactive:focus-visible,
+.table-seat:focus-visible,
+.rec-table-card:focus-visible,
+.store-card:focus-visible,
+.demo-item:focus-visible,
+.cat-card:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+/* ── 全局 loading 骨架 ── */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.skeleton {
+  background: var(--line);
+  border-radius: var(--radius-sm);
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+/* ── 卡片 ── */
+.el-card {
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  border-color: var(--line);
+  transition: box-shadow var(--transition-fast);
+}
+.el-card:hover {
+  box-shadow: var(--shadow-md);
+}
+
+/* ── 输入框 / 选择器 ── */
+.el-input__wrapper,
+.el-textarea__inner {
+  border-radius: var(--radius-sm);
+  transition: box-shadow var(--transition-fast);
+}
+.el-input__wrapper:focus-within,
+.el-textarea__inner:focus {
+  box-shadow: 0 0 0 1px var(--teal) inset;
+}
+
+/* ── 弹窗 ── */
+.el-dialog {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.el-dialog__header {
+  border-bottom: 1px solid var(--line);
+}
+.el-dialog__footer {
+  border-top: 1px solid var(--line);
+}
+
+/* ── 表格 ── */
+.el-table {
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.el-table th.el-table__cell {
+  background: var(--wash);
+  font-weight: 600;
+}
+
+/* ── 标签 ── */
+.el-tag {
+  border-radius: var(--radius-sm);
+}
+
+/* ── 消息 / 通知 ── */
+.el-message {
+  border-radius: var(--radius-sm);
+}
+.el-notification {
+  border-radius: var(--radius-sm);
+}
+
+/* ── 页面切换淡入 ── */
+@keyframes page-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-enter-active { animation: page-fade-in 0.3s ease-out; }
+
+/* ── 卡片点击涟漪 ── */
+@keyframes ripple {
+  to { transform: scale(2.5); opacity: 0; }
+}
+.ripple-container {
+  position: relative;
+  overflow: hidden;
+}
+.ripple-container .ripple-effect {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(15, 118, 110, 0.15);
+  width: 100px;
+  height: 100px;
+  margin-top: -50px;
+  margin-left: -50px;
+  animation: ripple 0.6s ease-out;
+  pointer-events: none;
+}
+
+/* ── 毛玻璃效果 ── */
+.glass {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(12px) saturate(1.4);
+  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* ── 渐变文字 ── */
+.gradient-text {
+  background: linear-gradient(135deg, var(--teal), var(--coral));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }

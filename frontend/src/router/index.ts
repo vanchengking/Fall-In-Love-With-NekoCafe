@@ -1,11 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 const roleDefaultRoute: Record<string, string> = {
-  customer: '/',
+  customer: '/customer',
   staff: '/staff',
   manager: '/admin/dashboard',
   operator: '/admin/dashboard',
-  cat_keeper: '/admin/cats',
+  cat_keeper: '/cat-keeper/cats',
   admin: '/admin/dashboard',
 }
 
@@ -16,8 +16,9 @@ const router = createRouter({
     { path: '/register', name: 'register', component: () => import('@/views/Register.vue'), meta: { public: true } },
 
     // 顾客路由
+    { path: '/', redirect: '/customer' },
     {
-      path: '/',
+      path: '/customer',
       component: () => import('@/layouts/CustomerLayout.vue'),
       children: [
         { path: '', name: 'customer-home', component: () => import('@/views/customer/CustomerHome.vue') },
@@ -57,6 +58,19 @@ const router = createRouter({
         { path: 'stores', name: 'admin-stores', component: () => import('@/views/admin/AdminStores.vue'), meta: { roles: ['manager', 'operator', 'admin'] } },
         { path: 'staff', name: 'admin-staff', component: () => import('@/views/admin/AdminStaff.vue'), meta: { roles: ['manager', 'admin'] } },
         { path: 'campaigns', name: 'admin-campaigns', component: () => import('@/views/admin/AdminCampaigns.vue'), meta: { roles: ['operator', 'admin'] } },
+        { path: 'audit-logs', name: 'admin-audit-logs', component: () => import('@/views/admin/AdminAuditLogs.vue'), meta: { roles: ['manager', 'operator', 'admin'] } },
+      ],
+    },
+
+    // 猫咪管家路由
+    {
+      path: '/cat-keeper',
+      component: () => import('@/layouts/CatKeeperLayout.vue'),
+      meta: { roles: ['cat_keeper', 'admin'] },
+      children: [
+        { path: '', redirect: '/cat-keeper/cats' },
+        { path: 'cats', name: 'ck-cats', component: () => import('@/views/cat-keeper/CatKeeperCats.vue') },
+        { path: 'cats/:id/health', name: 'ck-health', component: () => import('@/views/cat-keeper/CatKeeperHealth.vue') },
       ],
     },
 
@@ -95,6 +109,39 @@ router.beforeEach((to) => {
       }
     }
   }
+})
+
+// ── 动态页面标题 ──
+const titleMap: Record<string, string> = {
+  'customer-home': '首页',
+  'customer-stores': '选择门店',
+  'customer-store-detail': '门店详情',
+  'customer-store-reviews': '门店评价',
+  'customer-reservation': '预约桌位',
+  'customer-order': '在线点单',
+  'customer-payment': '确认支付',
+  'customer-reviews': '顾客评价',
+  'customer-profile': '个人中心',
+  'customer-recommend': '智能推荐',
+  'staff-today': '今日运营',
+  'staff-reservations': '预约管理',
+  'staff-orders': '订单管理',
+  'staff-tables': '实时桌位',
+  'admin-dashboard': '数据看板',
+  'admin-stores': '门店管理',
+  'admin-cats': '猫咪档案',
+  'admin-staff': '人员管理',
+  'admin-campaigns': '活动配置',
+  'admin-audit-logs': '审计日志',
+  'ck-cats': '猫咪档案',
+  'ck-health': '健康详情',
+  'login': '登录',
+  'register': '注册',
+}
+
+router.afterEach((to) => {
+  const pageName = titleMap[to.name as string] || ''
+  document.title = pageName ? `${pageName} | NekoCafe` : 'NekoCafe 智慧餐饮预约平台'
 })
 
 export default router

@@ -8,13 +8,9 @@ export interface Store {
   total_seats?: number
   open_time?: string
   close_time?: string
-  business_hours_text?: string
-  latitude?: number | string
-  longitude?: number | string
-  photo_url?: string | null
-  equipment_desc?: string | null
-  area_detail?: string | null
 }
+
+export type TableStatus = 'free' | 'reserved' | 'occupied' | 'dining' | 'cleaning' | 'maintenance'
 
 export interface DiningTable {
   id: number
@@ -23,11 +19,10 @@ export interface DiningTable {
   seats: number
   area: string
   cat_zone: boolean
-  status?: string
   available_for_slot?: boolean
-  photo_url?: string | null
-  area_detail?: string | null
-  device_note?: string | null
+  status?: TableStatus
+  current_reservation_id?: number
+  cat_name?: string
   score?: number
 }
 
@@ -72,7 +67,7 @@ export interface MenuItem {
   score?: number
 }
 
-export type ReservationStatus = 'created' | 'booked' | 'seated' | 'dining' | 'finished' | 'cancelled' | 'no_show'
+export type ReservationStatus = 'booked' | 'seated' | 'dining' | 'finished' | 'cancelled' | 'no_show'
 
 export interface Reservation {
   id: number
@@ -84,28 +79,49 @@ export interface Reservation {
   reservation_time: string
   party_size: number
   status: ReservationStatus
-  status_label?: string
   note: string
   customer_name?: string
   customerName?: string
+  mobile_number?: string
   table_code?: string
   store_name?: string
   cat_name?: string
   created_at?: string
 }
 
+export interface OrderItem {
+  id: number
+  menu_item_id: number
+  name: string
+  quantity: number
+  price_cents: number
+  subtotal_cents: number
+  served: boolean
+}
+
+export type OrderStatus = 'pending' | 'preparing' | 'served' | 'paid' | 'cancelled' | 'refunded' | 'exception'
+
 export interface Order {
   id: number
   reservation_id: number
   user_id: number
   store_id: number
-  status: string
+  status: OrderStatus
   payment_status: string
   total_cents: number
   reservation_date?: string
   reservation_time?: string
+  items?: OrderItem[]
   customer_name?: string
+  table_code?: string
+  party_size?: number
+  note?: string
+  cat_reminder?: string
+  payment_method?: string
+  served_at?: string
+  paid_at?: string
   created_at?: string
+  reservation_status?: ReservationStatus
 }
 
 export interface CatHealthRecord {
@@ -158,23 +174,8 @@ export interface AuthUser {
 }
 
 export interface AuthResult {
-  access_token: string
-  token_type?: string
-  expires_in?: number
-  /** 兼容旧响应：等同 access_token，优先读取 access_token */
-  token?: string
+  token: string
   user: AuthUser
-}
-
-export interface PointTransaction {
-  id: number
-  user_id: number
-  delta: number
-  balance_after: number
-  source_type: string
-  source_id?: number | null
-  reason?: string | null
-  created_at?: string
 }
 
 export interface ReservationForm {
@@ -209,19 +210,11 @@ export interface SelectedOrderItem extends OrderItemRequest {
 
 export interface Review {
   id: number
+  reservation_id: number | null
   user_id: number
   store_id: number
-  order_id?: number | null
-  reservation_id?: number | null
-  cat_id?: number | null
+  cat_id: number | null
   rating: number
-  food_rating?: number | null
-  service_rating?: number | null
-  environment_rating?: number | null
-  cat_rating?: number | null
   content: string | null
-  is_anonymous?: boolean
-  reply?: string | null
-  replied_at?: string | null
   created_at?: string
 }

@@ -7,3 +7,5 @@ coverage/
 ~$*.docx
 frontend/.vite/
 backend/.cache/
+.vscode/
+.github/skills/
