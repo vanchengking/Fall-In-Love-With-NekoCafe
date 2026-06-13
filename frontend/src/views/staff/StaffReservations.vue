@@ -178,7 +178,6 @@ function nextStepLabel(status: string): string {
   }
   return map[status] || '-'
 }
-}
 
 // ── 筛选（手机号模糊搜索，日期默认今天） ──
 const filteredReservations = computed(() => {
